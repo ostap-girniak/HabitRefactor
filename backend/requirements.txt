@@ -1,0 +1,35 @@
+# FastAPI + Server
+fastapi[standard]==0.115.*
+uvicorn[standard]==0.34.*
+pydantic==2.*
+pydantic-settings==2.*
+
+# Supabase
+supabase==2.*
+
+# Google Gemini AI
+google-genai==1.*
+
+# OpenAI SDK (for Groq/DeepSeek)
+openai==1.*
+
+# Background tasks
+apscheduler==3.*
+
+# Web Push Notifications
+pywebpush==2.*
+
+# Utilities
+python-multipart==0.*
+python-jose[cryptography]==3.*
+httpx==0.*
+python-dotenv==1.*
+
+# Testing
+pytest==8.*
+pytest-asyncio==0.*
+httpx==0.*
+
+# Audio processing
+faster-whisper
+imageio-ffmpeg
