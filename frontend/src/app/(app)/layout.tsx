@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  MessageCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/checkin", icon: CalendarCheck, label: "Check-in" },
   { href: "/journal", icon: Mic, label: "Journal" },
   { href: "/insights", icon: Brain, label: "AI Insights" },
+  { href: "/oracle", icon: MessageCircle, label: "Ask Oracle" },
   { href: "/identity", icon: Shield, label: "Identity Lab" },
   { href: "/forge", icon: Flame, label: "HabitRefactor" },
   { href: "/pain", icon: BarChart3, label: "Pain Data" },

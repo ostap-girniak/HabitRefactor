@@ -31,6 +31,40 @@ interface Insight {
   motivational_close: string;
 }
 
+const renderWithLinks = (text: string) => {
+  if (!text) return null;
+  // Regex to match [text](url)
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>);
+    }
+    parts.push(
+      <a
+        key={`link-${match.index}`}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[var(--accent-fire)] underline hover:opacity-80 transition-opacity font-medium"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {match[1]}
+      </a>
+    );
+    lastIndex = linkRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>);
+  }
+
+  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
+};
+
 export default function InsightsPage() {
   const { data: insightsData, isLoading } = useAIInsights();
   const generateAnalysis = useGenerateDailyAnalysis();
@@ -226,7 +260,7 @@ export default function InsightsPage() {
             <div className="card space-y-4">
               <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wide">The Strategic Deep-Dive</h3>
               <div className="text-sm text-[var(--text-secondary)] leading-relaxed space-y-4 whitespace-pre-wrap">
-                {(selected as any).full_analysis}
+                {renderWithLinks((selected as any).full_analysis)}
               </div>
             </div>
           )}
@@ -248,7 +282,7 @@ export default function InsightsPage() {
                       }`}>{ins.type}</span>
                     <span className="font-bold text-[var(--text-primary)] text-sm">{ins.title}</span>
                   </div>
-                  <p className="text-sm text-[var(--text-secondary)]">{ins.description}</p>
+                  <p className="text-sm text-[var(--text-secondary)]">{renderWithLinks(ins.description)}</p>
                 </div>
               ))}
             </div>
@@ -277,7 +311,7 @@ export default function InsightsPage() {
               {selected.recommendations.map((rec: any, i: number) => (
                 <div key={i} className="card bg-[var(--accent-fire-subtle)] border-[rgba(255,77,0,0.2)]">
                   <div className="font-bold text-sm text-[var(--accent-fire)] mb-1">{rec.title}</div>
-                  <p className="text-sm text-[var(--text-secondary)]">{rec.description}</p>
+                  <p className="text-sm text-[var(--text-secondary)]">{renderWithLinks(rec.description)}</p>
                 </div>
               ))}
             </div>

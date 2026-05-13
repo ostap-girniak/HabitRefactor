@@ -300,6 +300,29 @@ export function useGenerateManifesto() {
   });
 }
 
+export function useOracleHistory(limit?: number) {
+  return useQuery({
+    queryKey: ["ai", "oracle", "history", limit],
+    queryFn: async () => {
+      const { data } = await aiApi.getOracleHistory(limit);
+      return (data as any).history || [];
+    },
+  });
+}
+
+export function useOracleChat() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { message: string; include_history?: boolean }) =>
+      aiApi.oracleChat(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai", "oracle", "history"] });
+    },
+  });
+}
+
+
 export function useGenerateWeeklyAnalysis() {
   const queryClient = useQueryClient();
 

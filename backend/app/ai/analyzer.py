@@ -20,6 +20,7 @@ from app.ai.prompts import (
     PAIN_PROJECTION_PROMPT,
     IDENTITY_AFFIRMATION_PROMPT,
     MANIFESTO_PROMPT,
+    ORACLE_CHAT_PROMPT,
 )
 
 
@@ -522,6 +523,91 @@ class AIAnalyzer:
             await self.db.table("pain_projections").insert(p).execute()
 
         return projections
+    
+    async def chat_with_oracle(
+        self,
+        user_id: str,
+        message: str,
+        history: list[dict] | None = None,
+    ) -> dict:
+        """
+        Have an interactive chat with the Oracle.
+        Uses RAG for context + recent user data for personalization.
+        """
+        print(f"[AI] Oracle chat for user {user_id}: {message[:50]}...")
+        profile = await self._get_profile(user_id)
+        
+        # 1. RAG context
+        rag_context = await self.rag.build_context(
+            user_id=user_id,
+            query=message,
+        )
+        
+        # 2. Build rich current context (last 7 days, not just today)
+        today = date.today()
+        week_ago = (today - timedelta(days=7)).isoformat()
+        today_str = today.isoformat()
+
+        habits = await self._get_active_habits(user_id)
+        habits_summary = ', '.join(h['name'] for h in habits) if habits else "No active habits yet."
+
+        # Recent checkins (7 days)
+        checkins_resp = await (
+            self.db.table("checkins")
+            .select("result, date, relapse_trigger, notes")
+            .eq("user_id", user_id)
+            .gte("date", week_ago)
+            .lte("date", today_str)
+            .order("date", desc=True)
+            .limit(20)
+            .execute()
+        )
+        recent_checkins = checkins_resp.data or []
+        victories = len([c for c in recent_checkins if c["result"] == "success"])
+        relapses = len([c for c in recent_checkins if c["result"] == "relapse"])
+
+        # Recent journal entries (7 days)
+        journals_resp = await (
+            self.db.table("journal_entries")
+            .select("raw_text, transcript, created_at")
+            .eq("user_id", user_id)
+            .gte("created_at", f"{week_ago}T00:00:00")
+            .lte("created_at", f"{today_str}T23:59:59")
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        recent_journals = journals_resp.data or []
+        journal_snippets = "\n".join([
+            f"- [{j.get('created_at', '')[:10]}] {(j.get('transcript') or j.get('raw_text') or '')[:200]}"
+            for j in recent_journals
+        ]) if recent_journals else "No journal entries this week."
+
+        # Streaks
+        streaks_info = self._format_streaks(habits)
+
+        current_context = (
+            f"Active habits: {habits_summary}\n"
+            f"Streaks: {streaks_info}\n"
+            f"Last 7 days: {victories} victories, {relapses} relapses out of {len(recent_checkins)} check-ins.\n"
+            f"Recent journal entries:\n{journal_snippets}"
+        )
+
+        # 3. Build prompt
+        prompt = ORACLE_CHAT_PROMPT.format(
+            display_name=profile.get("display_name", "Warrior"),
+            identity_statement=profile.get("current_identity_statement", "Becoming unstoppable"),
+            current_context=current_context,
+            personal_context=rag_context["personal_context"],
+            knowledge_context=rag_context["knowledge_context"],
+            history=json.dumps(history or [], indent=2),
+            message=message,
+        )
+
+        # 4. Generate
+        response = await self._generate(prompt, temperature=0.7)
+        
+        return response
 
     # ---- Helper methods ----
 
