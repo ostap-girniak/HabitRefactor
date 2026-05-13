@@ -20,9 +20,11 @@ import {
   getCurrentPushSubscription,
   isPushSupported,
   sendTestPush,
+  runDangerCheck,
   subscribeToPush,
   unsubscribeFromPush,
 } from "@/lib/push";
+import { notificationsApi } from "@/lib/api";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -188,20 +190,80 @@ export default function SettingsPage() {
             </button>
           </div>
           {pushSupported && notificationsEnabled && (
-            <button
-              onClick={async () => {
-                try {
-                  await sendTestPush();
-                  addToast("success", "Test push sent.");
-                } catch (err) {
-                  console.error("Test push failed:", err);
-                  addToast("error", "Failed to send test push.");
-                }
-              }}
-              className="btn-ghost text-sm"
-            >
-              Send test push
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await sendTestPush();
+                    addToast("success", "Test push sent.");
+                  } catch (err) {
+                    console.error("Test push failed:", err);
+                    addToast("error", "Failed to send test push.");
+                  }
+                }}
+                className="btn-ghost text-sm"
+              >
+                Send test push
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await runDangerCheck();
+                    const risk = data?.oracle?.forecast?.risk_score;
+                    const danger = data?.oracle?.forecast?.danger_zone;
+                    addToast(
+                      "info",
+                      `Danger check: risk ${risk ?? "?"}/100${danger ? " (DANGER)" : ""}`
+                    );
+                  } catch (err) {
+                    console.error("Danger check failed:", err);
+                    addToast("error", "Failed to run danger check.");
+                  }
+                }}
+                className="btn-ghost text-sm"
+              >
+                Run danger check
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await runDangerCheck({ forceSend: true });
+                    addToast(
+                      "success",
+                      `Force push sent (${data?.sent ?? 0}).`
+                    );
+                  } catch (err) {
+                    console.error("Force push failed:", err);
+                    addToast("error", "Failed to force danger push.");
+                  }
+                }}
+                className="btn-ghost text-sm"
+              >
+                Force danger push
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { data } = await notificationsApi.journalAlert();
+                    if ((data as any).is_danger) {
+                      addToast("success", `Danger push sent! Keywords: ${(data as any).found_keywords.join(', ')}`);
+                    } else {
+                      addToast("success", "Motivation push sent! No danger detected.");
+                    }
+                  } catch (err: any) {
+                    console.error("Journal alert failed:", err);
+                    const msg = err?.response?.data?.detail || "Failed to trigger journal alert.";
+                    addToast("error", msg);
+                  }
+                }}
+                className="btn-ghost text-sm text-[var(--accent-info)] border-[var(--accent-info)]"
+              >
+                Journal alert test
+              </button>
+              <a href="/reminders" className="btn-ghost text-sm">
+                Configure danger zone
+              </a>
+            </div>
           )}
         </div>
       </div>

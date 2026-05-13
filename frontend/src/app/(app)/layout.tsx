@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "War Room" },
@@ -80,6 +81,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Bottom */}
         <div className="space-y-1 pt-4 border-t border-[var(--border-default)]">
+          <div className="flex items-center justify-between px-3 py-1">
+            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Alerts</span>
+            <NotificationBell />
+          </div>
           <Link href="/settings" className="sidebar-link">
             <Settings className="w-5 h-5" />
             <span>Settings</span>
@@ -92,30 +97,52 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)] border-t border-[var(--border-default)] z-30 px-2 py-1 glass">
-        <div className="flex items-center justify-around">
-          {navItems.slice(0, 5).map((item) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)] border-t border-[var(--border-default)] z-30 glass" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="flex items-center overflow-x-auto scrollbar-hide px-1 py-1" style={{ WebkitOverflowScrolling: "touch" }}>
+          {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg text-[10px] font-medium transition-colors ${
+                className={`flex flex-col items-center gap-0.5 min-w-[64px] px-2 py-2 rounded-lg text-[10px] font-medium transition-colors shrink-0 ${
                   isActive
                     ? "text-[var(--accent-fire)]"
                     : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 }`}
               >
                 <item.icon className="w-5 h-5" />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
+          <Link
+            href="/settings"
+            className={`flex flex-col items-center gap-0.5 min-w-[64px] px-2 py-2 rounded-lg text-[10px] font-medium transition-colors shrink-0 ${
+              pathname === "/settings"
+                ? "text-[var(--accent-fire)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            <Settings className="w-5 h-5" />
+            <span className="truncate">Settings</span>
+          </Link>
         </div>
       </nav>
 
+      {/* Mobile top bar with notification bell */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 glass border-b border-[var(--border-default)]" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <div className="flex items-center justify-between px-4 py-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <img src="/logo.png" alt="" className="w-7 h-7 rounded-lg" />
+            <span className="text-sm font-bold text-[var(--text-primary)]">HabitRefactor</span>
+          </Link>
+          <NotificationBell />
+        </div>
+      </div>
+
       {/* Main content */}
-      <main className="flex-1 md:ml-64 pb-20 md:pb-0">
+      <main className="flex-1 md:ml-64 pb-20 md:pb-0 pt-14 md:pt-0">
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-8">
           {children}
         </div>

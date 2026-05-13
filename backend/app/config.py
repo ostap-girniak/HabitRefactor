@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     relapse_interceptor_min_send_interval_minutes: int = 180
     relapse_interceptor_danger_zone_threshold: float = 70.0
 
+    # Scheduled Reminders (time-based push reminders)
+    enable_scheduled_reminders: bool = False
+    scheduled_reminders_interval_minutes: int = 1
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

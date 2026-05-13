@@ -1,7 +1,16 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { habitsApi, checkinsApi, statsApi, aiApi, journalApi, identityApi, authApi } from "./api";
+import {
+  habitsApi,
+  checkinsApi,
+  statsApi,
+  aiApi,
+  journalApi,
+  identityApi,
+  authApi,
+  notificationsApi,
+} from "./api";
 import { useUserStore, useHabitStore } from "./store";
 import type { Habit, UserProfile } from "./store";
 
@@ -443,6 +452,103 @@ export function useBattleHistory(habitId?: string) {
     queryKey: ["stats", "battles", habitId],
     queryFn: async () => {
       return await statsApi.getBattles(habitId);
+    },
+  });
+}
+
+// ============================================
+// Notifications / Reminders Hooks
+// ============================================
+
+export function useReminders() {
+  return useQuery({
+    queryKey: ["notifications", "reminders"],
+    queryFn: async () => {
+      const { data } = await notificationsApi.getReminders();
+      return data;
+    },
+  });
+}
+
+export function useCreateReminder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => notificationsApi.createReminder(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "reminders"] });
+    },
+  });
+}
+
+export function useUpdateReminder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      notificationsApi.updateReminder(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "reminders"] });
+    },
+  });
+}
+
+export function useDeleteReminder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => notificationsApi.deleteReminder(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "reminders"] });
+    },
+  });
+}
+
+// ============================================
+// Notification History Hooks
+// ============================================
+
+export function useNotificationHistory(limit?: number) {
+  return useQuery({
+    queryKey: ["notifications", "history", limit],
+    queryFn: async () => {
+      const { data } = await notificationsApi.getHistory(limit);
+      return data;
+    },
+  });
+}
+
+export function useUnreadCount() {
+  return useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      const { data } = await notificationsApi.getUnreadCount();
+      return data as { unread: number };
+    },
+    refetchInterval: 30_000, // Poll every 30 seconds
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => notificationsApi.markRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    },
+  });
+}
+
+export function useMarkAllRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
 }

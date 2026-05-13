@@ -47,6 +47,7 @@ export async function middleware(request: NextRequest) {
     "/forge",
     "/pain",
     "/settings",
+    "/reminders",
   ];
 
   const isProtected = protectedPaths.some(

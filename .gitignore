@@ -42,3 +42,10 @@ frontend/.env*.local
 brain/
 scratch/
 
+# AI Assistants
+.claude/
+.gemini/
+.cursor/
+
+# Local logs
+backend_log.txt

@@ -1,8 +1,8 @@
 // Catalyst Forge — Service Worker
 // Handles push notifications and basic offline caching
 
-const CACHE_NAME = "catalyst-forge-v1";
-const STATIC_ASSETS = ["/", "/dashboard", "/login", "/register"];
+const CACHE_NAME = "catalyst-forge-v2";
+const STATIC_ASSETS = ["/", "/dashboard", "/login", "/register", "/offline.html"];
 
 // Install: cache static assets
 self.addEventListener("install", (event) => {
@@ -112,9 +112,15 @@ self.addEventListener("fetch", (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
+      .catch(async () => {
         // Fallback to cache if network fails
-        return caches.match(request);
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) return cachedResponse;
+        
+        // If it's a page request and we don't have it in cache, show offline fallback
+        if (request.mode === "navigate" || (request.headers.get("accept") || "").includes("text/html")) {
+          return caches.match("/offline.html");
+        }
       })
   );
 });

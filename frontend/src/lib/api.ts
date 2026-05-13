@@ -1,13 +1,14 @@
 import axios from "axios";
 import { createClient } from "./supabase";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Proxy all API requests through Next.js to avoid browser CORS / network-policy issues.
+const API_BASE_URL = "/api/backend";
 
 /**
  * Axios instance configured with auth token from Supabase.
  */
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`,
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -155,6 +156,13 @@ export const notificationsApi = {
   unsubscribe: (endpoint: string) =>
     api.delete("/notifications/subscribe", { params: { endpoint } }),
   testPush: () => api.post("/notifications/test-push"),
+  dangerCheck: (params?: { habitId?: string; forceSend?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.habitId) qs.set("habit_id", params.habitId);
+    if (params?.forceSend) qs.set("force_send", "true");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return api.post(`/notifications/danger-check${suffix}`);
+  },
   getReminders: () => api.get("/notifications/reminders"),
   createReminder: (data: Record<string, unknown>) =>
     api.post("/notifications/reminders", data),
@@ -162,4 +170,11 @@ export const notificationsApi = {
     api.put(`/notifications/reminders/${id}`, data),
   deleteReminder: (id: string) =>
     api.delete(`/notifications/reminders/${id}`),
+  // Notification history
+  getHistory: (limit?: number) =>
+    api.get("/notifications/history", { params: { limit: limit || 30 } }),
+  getUnreadCount: () => api.get("/notifications/unread-count"),
+  markRead: (id: string) => api.post(`/notifications/history/${id}/read`),
+  markAllRead: () => api.post("/notifications/read-all"),
+  journalAlert: () => api.post("/notifications/journal-alert"),
 };

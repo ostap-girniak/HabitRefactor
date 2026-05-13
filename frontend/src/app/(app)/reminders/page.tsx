@@ -1,0 +1,357 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Bell, Plus, Trash2 } from "lucide-react";
+import { useHabits, useReminders, useCreateReminder, useDeleteReminder, useUpdateReminder } from "@/lib/hooks";
+import { useUIStore } from "@/lib/store";
+
+type Reminder = {
+  id: string;
+  habit_id: string | null;
+  reminder_type: string;
+  is_smart: boolean;
+  is_enabled: boolean;
+  title: string;
+  message: string;
+  time_of_day: string | null;
+  days_of_week: number[] | null;
+  danger_threshold?: number | null;
+  cooldown_minutes?: number | null;
+  quiet_hours_start?: string | null;
+  quiet_hours_end?: string | null;
+  habits?: { name?: string } | null;
+};
+
+const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun as Supabase int? we'll store 0-6 with 0 Sunday for simplicity
+
+export default function RemindersPage() {
+  const addToast = useUIStore((s) => s.addToast);
+  const { data: habitsData } = useHabits();
+  const habits = (habitsData as any) || [];
+
+  const { data, isLoading } = useReminders();
+  const reminders: Reminder[] = (data as any)?.reminders || [];
+
+  const createReminder = useCreateReminder();
+  const updateReminder = useUpdateReminder();
+  const deleteReminder = useDeleteReminder();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form, setForm] = useState({
+    reminder_type: "danger_zone",
+    habit_id: "",
+    is_smart: true,
+    is_enabled: true,
+    title: "🔥 Danger Zone",
+    message: "High relapse risk detected. Open your War Room now.",
+    time_of_day: "09:00",
+    days_of_week: DEFAULT_DAYS,
+    danger_threshold: 70,
+    cooldown_minutes: 180,
+    quiet_hours_start: "22:00",
+    quiet_hours_end: "07:00",
+  });
+
+  const sorted = useMemo(() => {
+    return [...reminders].sort((a, b) => (a.reminder_type || "").localeCompare(b.reminder_type || ""));
+  }, [reminders]);
+
+  const submit = async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        reminder_type: form.reminder_type,
+        habit_id: form.habit_id || null,
+        is_smart: form.is_smart,
+        title: form.title,
+        message: form.message,
+      };
+
+      if (!form.is_smart) {
+        payload.time_of_day = form.time_of_day;
+        payload.days_of_week = form.days_of_week;
+      } else if (form.reminder_type === "danger_zone") {
+        payload.danger_threshold = form.danger_threshold;
+        payload.cooldown_minutes = form.cooldown_minutes;
+        payload.quiet_hours_start = form.quiet_hours_start;
+        payload.quiet_hours_end = form.quiet_hours_end;
+      }
+
+      await createReminder.mutateAsync(payload);
+      addToast("success", "Reminder created.");
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      addToast("error", "Failed to create reminder.");
+    }
+  };
+
+  const toggleEnabled = async (r: Reminder) => {
+    try {
+      await updateReminder.mutateAsync({
+        id: r.id,
+        data: { is_enabled: !r.is_enabled },
+      });
+    } catch (e) {
+      console.error(e);
+      addToast("error", "Failed to update reminder.");
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await deleteReminder.mutateAsync(id);
+      addToast("info", "Reminder deleted.");
+    } catch (e) {
+      console.error(e);
+      addToast("error", "Failed to delete reminder.");
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-[var(--text-primary)] flex items-center gap-2">
+            <Bell className="w-5 h-5 text-[var(--accent-ember)]" />
+            Reminders
+          </h1>
+          <p className="text-[var(--text-secondary)] text-sm mt-1">
+            Smart danger-zone pushes or scheduled nudges.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/settings" className="btn-ghost text-sm">
+            Back
+          </Link>
+          <button onClick={() => setIsModalOpen(true)} className="btn-fire text-sm flex items-center gap-2">
+            <Plus className="w-4 h-4" /> New
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="card p-6 text-[var(--text-secondary)]">Loading…</div>
+      ) : sorted.length === 0 ? (
+        <div className="card p-6 text-[var(--text-secondary)]">
+          No reminders yet. Create a smart Danger Zone reminder to enable Relapse Interceptor.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sorted.map((r) => (
+            <div key={r.id} className="card flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-fire">{r.reminder_type}</span>
+                  {r.is_smart ? <span className="badge">smart</span> : <span className="badge">scheduled</span>}
+                  {r.habits?.name ? (
+                    <span className="text-xs text-[var(--text-muted)] truncate">Habit: {r.habits.name}</span>
+                  ) : (
+                    <span className="text-xs text-[var(--text-muted)]">All habits</span>
+                  )}
+                </div>
+                <div className="font-bold text-[var(--text-primary)] mt-1 truncate">{r.title}</div>
+                <div className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">{r.message}</div>
+                {r.reminder_type === "danger_zone" && r.is_smart && (
+                  <div className="text-xs text-[var(--text-muted)] mt-2">
+                    Threshold: {r.danger_threshold ?? "default"} • Cooldown: {r.cooldown_minutes ?? "default"} min •
+                    Quiet: {r.quiet_hours_start ?? "—"}–{r.quiet_hours_end ?? "—"}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  onClick={() => toggleEnabled(r)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    r.is_enabled
+                      ? "bg-[rgba(0,230,118,0.12)] border-[rgba(0,230,118,0.3)] text-[var(--accent-success)]"
+                      : "bg-[var(--bg-elevated)] border-[var(--border-default)] text-[var(--text-muted)]"
+                  }`}
+                >
+                  {r.is_enabled ? "ENABLED" : "DISABLED"}
+                </button>
+                <button onClick={() => remove(r.id)} className="btn-ghost text-sm flex items-center gap-2 text-[var(--accent-danger)]">
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="card w-full max-w-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-black text-[var(--text-primary)]">New reminder</div>
+              <button onClick={() => setIsModalOpen(false)} className="btn-ghost text-sm">
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Type</label>
+                <select
+                  className="input-forge"
+                  value={form.reminder_type}
+                  onChange={(e) => setForm((s) => ({ ...s, reminder_type: e.target.value }))}
+                >
+                  <option value="danger_zone">Danger Zone</option>
+                  <option value="morning_checkin">Morning checkin</option>
+                  <option value="evening_review">Evening review</option>
+                  <option value="motivation">Motivation</option>
+                  <option value="streak_celebration">Streak celebration</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Habit (optional)</label>
+                <select
+                  className="input-forge"
+                  value={form.habit_id}
+                  onChange={(e) => setForm((s) => ({ ...s, habit_id: e.target.value }))}
+                >
+                  <option value="">All habits</option>
+                  {habits.map((h: any) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-[var(--text-primary)]">Smart (AI-driven)</div>
+                  <div className="text-xs text-[var(--text-muted)]">
+                    Smart sends only when risk is detected.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setForm((s) => ({ ...s, is_smart: !s.is_smart }))}
+                  className={`w-12 h-6 rounded-full transition-all relative ${
+                    form.is_smart ? "bg-[var(--accent-success)]" : "bg-[var(--bg-elevated)]"
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all ${
+                      form.is_smart ? "left-6" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Title</label>
+                <input
+                  className="input-forge"
+                  value={form.title}
+                  onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Message</label>
+                <textarea
+                  className="input-forge min-h-[90px]"
+                  value={form.message}
+                  onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))}
+                />
+              </div>
+
+              {form.is_smart && form.reminder_type === "danger_zone" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Threshold</label>
+                    <input
+                      type="number"
+                      className="input-forge"
+                      min={0}
+                      max={100}
+                      value={form.danger_threshold}
+                      onChange={(e) => setForm((s) => ({ ...s, danger_threshold: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Cooldown (min)</label>
+                    <input
+                      type="number"
+                      className="input-forge"
+                      min={0}
+                      value={form.cooldown_minutes}
+                      onChange={(e) => setForm((s) => ({ ...s, cooldown_minutes: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Quiet start</label>
+                    <input
+                      type="time"
+                      className="input-forge"
+                      value={form.quiet_hours_start}
+                      onChange={(e) => setForm((s) => ({ ...s, quiet_hours_start: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Quiet end</label>
+                    <input
+                      type="time"
+                      className="input-forge"
+                      value={form.quiet_hours_end}
+                      onChange={(e) => setForm((s) => ({ ...s, quiet_hours_end: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              ) : !form.is_smart ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Time</label>
+                    <input
+                      type="time"
+                      className="input-forge"
+                      value={form.time_of_day}
+                      onChange={(e) => setForm((s) => ({ ...s, time_of_day: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Days (0-6)</label>
+                    <input
+                      className="input-forge"
+                      value={form.days_of_week.join(",")}
+                      onChange={(e) =>
+                        setForm((s) => ({
+                          ...s,
+                          days_of_week: e.target.value
+                            .split(",")
+                            .map((x) => x.trim())
+                            .filter(Boolean)
+                            .map((x) => Number(x))
+                            .filter((n) => Number.isFinite(n) && n >= 0 && n <= 6),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button onClick={() => setIsModalOpen(false)} className="btn-ghost text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={submit}
+                disabled={createReminder.isPending}
+                className="btn-fire text-sm"
+              >
+                {createReminder.isPending ? "Creating…" : "Create reminder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -82,3 +82,8 @@ export async function unsubscribeFromPush(): Promise<void> {
 export async function sendTestPush(): Promise<void> {
   await notificationsApi.testPush();
 }
+
+export async function runDangerCheck(params?: { habitId?: string; forceSend?: boolean }) {
+  const res = await notificationsApi.dangerCheck(params);
+  return res.data;
+}

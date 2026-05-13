@@ -51,37 +51,39 @@ Active since: {member_since}
 
 ---
 
-Generate a daily analysis as JSON with this schema:
-{{
+Generate a daily analysis as JSON with this schema. 
+IMPORTANT: If "RELEVANT RESOURCES" are provided in the Wisdom & Science section, you MUST include them in the "recommendations" list with type "read", "watch", or "exercise" and provide the URL in the description.
+
+{
     "title": "A punchy, specific title for today's analysis",
     "summary": "2-3 sentence brutal-but-caring summary of the day",
     "full_analysis": "Expansive, surgical markdown analysis (8-12 paragraphs). You MUST reference specific check-in times, journal quotes, and exact data points. Don't just say 'you did well', say 'Your 2:15 PM entry revealed a weakness that you later countered by X'. Analyze the psychological underpinnings of today's actions. Connect today to their Identity Statement and long-term trajectory.",
     "insights": [
-        {{
+        {
             "type": "pattern|warning|victory|discovery",
             "title": "Short insight title",
             "description": "DETAILED specific observation from the data (at least 2 sentences)",
             "severity": 1-10
-        }}
+        }
     ],
     "recommendations": [
-        {{
+        {
             "type": "action|read|watch|exercise",
             "title": "Specific recommendation",
-            "description": "DETAILED explanation of why this will help, connected directly to today's struggles or wins",
+            "description": "DETAILED explanation of why this will help, connected directly to today's struggles or wins. If a URL was provided in the context, INCLUDE it here as a markdown link.",
             "source": "Book/video/exercise name if applicable"
-        }}
+        }
     ],
     "trigger_patterns": [
-        {{
+        {
             "trigger": "Identified trigger",
             "frequency": "How often detected",
             "correlation": "Deep analysis of what it correlates with in their environment/mood"
-        }}
+        }
     ],
     "tomorrow_action": "ONE specific, non-negotiable thing to do tomorrow",
     "motivational_close": "A powerful, personalized closing statement (Goggins-style)"
-}}
+}
 """
 
 HERO_CHAPTER_PROMPT = """You are writing Chapter {chapter_number} of this warrior's epic transformation story.

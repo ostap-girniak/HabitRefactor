@@ -6,7 +6,7 @@ interface HeatmapData {
   date: string;
   success: number;
   relapse: number;
-  hours?: Record<number, string[]>;
+  hours?: Record<string, string[]>;
 }
 
 interface GithubHeatmapProps {
@@ -119,11 +119,10 @@ export function GithubHeatmap({ data }: GithubHeatmapProps) {
         <div className="grid grid-cols-6 md:grid-cols-12 gap-2">
           {hoursArray.map((hour) => {
             // Handle both string and number keys from JSON
-            const statuses = hoursData[hour] || hoursData[hour.toString()] || [];
+            const key = String(hour);
+            const statuses = hoursData[key] || [];
             const hasRelapse = statuses.includes("relapse");
             const hasSuccess = statuses.includes("success");
-            
-            console.log(`Hour ${hour} data:`, statuses);
             
             let colorClass = "bg-[var(--bg-elevated)] border-[var(--border-default)]";
             if (hasRelapse) colorClass = "bg-[rgba(255,23,68,0.15)] border-[var(--accent-danger)] text-[var(--accent-danger)] shadow-[0_0_10px_rgba(255,23,68,0.2)]";

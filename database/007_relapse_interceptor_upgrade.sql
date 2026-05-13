@@ -50,7 +50,12 @@ ALTER TABLE IF EXISTS public.reminders
   ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'Reminder',
   ADD COLUMN IF NOT EXISTS message TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  ADD COLUMN IF NOT EXISTS last_sent_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS last_sent_at TIMESTAMPTZ,
+  -- Danger-zone tuning (optional, per reminder)
+  ADD COLUMN IF NOT EXISTS danger_threshold NUMERIC,
+  ADD COLUMN IF NOT EXISTS cooldown_minutes INT,
+  ADD COLUMN IF NOT EXISTS quiet_hours_start TIME,
+  ADD COLUMN IF NOT EXISTS quiet_hours_end TIME;
 
 -- Map legacy columns if they exist
 DO $$
@@ -89,4 +94,3 @@ CREATE POLICY "Users can CRUD own push subscriptions"
   WITH CHECK (auth.uid() = user_id);
 
 -- Done.
-

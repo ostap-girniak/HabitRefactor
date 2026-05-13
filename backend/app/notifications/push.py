@@ -80,3 +80,34 @@ async def send_web_push(
         return f"webpush_error:{status_code or 'unknown'}"
     except Exception:
         return "webpush_error"
+
+
+async def save_notification_to_history(
+    *,
+    client,
+    user_id: str,
+    title: str,
+    body: str,
+    notification_type: str = "general",
+    url: str = "/dashboard",
+    metadata: Optional[dict] = None,
+) -> None:
+    """
+    Persist a notification to notification_history so it appears in the bell icon.
+    Fails silently if the table doesn't exist yet.
+    """
+    try:
+        row = {
+            "user_id": user_id,
+            "title": title,
+            "message": body,
+            "notification_type": notification_type,
+            "url": url,
+            "is_read": False,
+        }
+        if metadata:
+            row["metadata"] = metadata
+        await client.table("notification_history").insert(row).execute()
+    except Exception as e:
+        print(f"[WARN] Failed to save notification to history: {e}")
+

@@ -13,7 +13,7 @@ from supabase import AsyncClient
 
 from app.config import get_settings
 from app.dependencies import get_authenticated_client, get_current_user
-from app.notifications.push import send_web_push
+from app.notifications.push import send_web_push, save_notification_to_history
 from app.stats.oracle import compute_oracle
 
 router = APIRouter()
@@ -41,6 +41,10 @@ class ReminderCreate(BaseModel):
     time_of_day: Optional[str] = None  # HH:MM format
     days_of_week: Optional[list[int]] = None
     is_smart: bool = False
+    danger_threshold: Optional[float] = None
+    cooldown_minutes: Optional[int] = None
+    quiet_hours_start: Optional[str] = None  # HH:MM
+    quiet_hours_end: Optional[str] = None  # HH:MM
     title: str
     message: str
 
@@ -49,6 +53,10 @@ class ReminderUpdate(BaseModel):
     time_of_day: Optional[str] = None
     days_of_week: Optional[list[int]] = None
     is_smart: Optional[bool] = None
+    danger_threshold: Optional[float] = None
+    cooldown_minutes: Optional[int] = None
+    quiet_hours_start: Optional[str] = None
+    quiet_hours_end: Optional[str] = None
     title: Optional[str] = None
     message: Optional[str] = None
     is_enabled: Optional[bool] = None
@@ -171,12 +179,14 @@ async def send_test_push(
 
     sent = 0
     deactivated = 0
+    title = "🔥 Test push"
+    body = "Push is working. Stay hard."
     for sub in subs:
         err = await send_web_push(
             settings=settings,
             subscription=sub,
-            title="🔥 Test push",
-            body="Push is working. Stay hard.",
+            title=title,
+            body=body,
             url="/dashboard",
             tag="test-push",
         )
@@ -191,6 +201,16 @@ async def send_test_push(
                 .eq("endpoint", sub.get("endpoint"))
                 .execute()
             )
+
+    if sent > 0:
+        await save_notification_to_history(
+            client=client,
+            user_id=str(user.id),
+            title=title,
+            body=body,
+            notification_type="test",
+            url="/dashboard",
+        )
 
     return {"sent": sent, "deactivated": deactivated}
 
@@ -246,6 +266,206 @@ async def danger_check_now(
             sent += 1
 
     return {"sent": sent, "oracle": oracle}
+
+
+# ---- Journal Alert (E2E test) ----
+
+# Keywords that indicate the user is struggling
+_DANGER_KEYWORDS = [
+    "temptation", "tempt", "urge", "craving", "relapse", "slip", "fail",
+    "gave in", "couldn't resist", "struggling", "weak", "porn", "drink",
+    "smoke", "high", "wasted", "binged", "broke", "again",
+    # Ukrainian
+    "спокуса", "зрив", "не втримав", "знову", "слабкість", "тяга",
+    "зламався", "хочеться", "дуже хочу", "не можу", "важко",
+]
+
+
+@router.post("/journal-alert")
+async def journal_alert(
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """
+    E2E notification test:
+    1. Read the user's latest journal entry
+    2. Scan the text for danger keywords
+    3. Send a push notification with contextual message
+    4. Save to notification_history
+
+    This proves push notifications + history work end-to-end.
+    """
+    settings = get_settings()
+
+    # 1. Fetch latest journal entry
+    journal_resp = await (
+        client.table("journal_entries")
+        .select("id, raw_text, transcript, mood_rating, key_themes, detected_emotions, created_at")
+        .eq("user_id", str(user.id))
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    entries = journal_resp.data or []
+    if not entries:
+        raise HTTPException(status_code=404, detail="No journal entries found. Write something in the journal first.")
+
+    entry = entries[0]
+    text = (entry.get("raw_text") or "") + " " + (entry.get("transcript") or "")
+    text_lower = text.lower().strip()
+
+    if not text_lower:
+        raise HTTPException(status_code=400, detail="Latest journal entry has no text content.")
+
+    # 2. Analyze: scan for danger keywords
+    found_keywords = [kw for kw in _DANGER_KEYWORDS if kw in text_lower]
+    mood = entry.get("mood_rating")
+    is_danger = len(found_keywords) >= 1 or (mood is not None and mood <= 3)
+
+    # 3. Build notification content
+    if is_danger:
+        title = "⚠️ Danger signal detected"
+        snippet = text[:80].strip() + ("..." if len(text) > 80 else "")
+        body = f"Your journal entry suggests a struggle: \"{snippet}\". Open the app — you're stronger than this."
+        notification_type = "danger_zone"
+        url = "/dashboard"
+        tag = "journal-danger-alert"
+    else:
+        title = "💪 Journal analyzed — keep going!"
+        themes = entry.get("key_themes") or []
+        if themes:
+            body = f"Themes detected: {', '.join(themes[:3])}. Stay on the path, warrior."
+        else:
+            body = "Your entry has been recorded. Consistency is the weapon. Stay hard."
+        notification_type = "motivation"
+        url = "/journal"
+        tag = "journal-motivation"
+
+    # 4. Send push
+    subs_resp = await (
+        client.table("push_subscriptions")
+        .select("endpoint, p256dh_key, auth_key, keys, is_active")
+        .eq("user_id", str(user.id))
+        .eq("is_active", True)
+        .limit(20)
+        .execute()
+    )
+    subs = subs_resp.data or []
+
+    sent = 0
+    for sub in subs:
+        err = await send_web_push(
+            settings=settings,
+            subscription=sub,
+            title=title,
+            body=body,
+            url=url,
+            tag=tag,
+        )
+        if err is None:
+            sent += 1
+        elif err == "subscription_gone":
+            await (
+                client.table("push_subscriptions")
+                .update({"is_active": False})
+                .eq("endpoint", sub.get("endpoint"))
+                .execute()
+            )
+
+    # 5. Save to notification_history
+    await save_notification_to_history(
+        client=client,
+        user_id=str(user.id),
+        title=title,
+        body=body,
+        notification_type=notification_type,
+        url=url,
+        metadata={
+            "journal_entry_id": str(entry["id"]),
+            "found_keywords": found_keywords,
+            "mood_rating": mood,
+            "is_danger": is_danger,
+        },
+    )
+
+    return {
+        "sent": sent,
+        "is_danger": is_danger,
+        "found_keywords": found_keywords,
+        "title": title,
+        "body": body,
+        "journal_entry_id": str(entry["id"]),
+    }
+
+
+# ---- Notification History ----
+
+
+@router.get("/history")
+async def list_notification_history(
+    limit: int = 30,
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """List recent notification history for the bell icon."""
+    response = await (
+        client.table("notification_history")
+        .select("*")
+        .eq("user_id", str(user.id))
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return {"notifications": response.data}
+
+
+@router.get("/unread-count")
+async def unread_count(
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """Return count of unread notifications."""
+    response = await (
+        client.table("notification_history")
+        .select("id", count="exact")
+        .eq("user_id", str(user.id))
+        .eq("is_read", False)
+        .execute()
+    )
+    return {"unread": response.count or 0}
+
+
+@router.post("/history/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: UUID,
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """Mark a single notification as read."""
+    await (
+        client.table("notification_history")
+        .update({"is_read": True})
+        .eq("id", str(notification_id))
+        .eq("user_id", str(user.id))
+        .execute()
+    )
+    return {"ok": True}
+
+
+@router.post("/read-all")
+async def mark_all_read(
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """Mark all notifications as read."""
+    await (
+        client.table("notification_history")
+        .update({"is_read": True})
+        .eq("user_id", str(user.id))
+        .eq("is_read", False)
+        .execute()
+    )
+    return {"ok": True}
 
 
 # ---- Reminders ----

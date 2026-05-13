@@ -24,10 +24,10 @@ export function StreakCalendar({ data, months = 3 }: StreakCalendarProps) {
     startDate.setDate(startDate.getDate() - startDate.getDay()); // Align to Sunday
 
     // Group data by date
-    const dataMap = new Map<string, { result: string | null; hours: Record<number, string[]> }>();
+    const dataMap = new Map<string, { result: string | null; hours: Record<string, string[]> }>();
     
     safeData.forEach((d) => {
-      let hoursMap: Record<number, string[]> = {};
+      let hoursMap: Record<string, string[]> = {};
       
       // Attempt to extract hour if created_at is present
       if (d.created_at && d.result) {
@@ -35,7 +35,7 @@ export function StreakCalendar({ data, months = 3 }: StreakCalendarProps) {
           // ensure the date parses correctly by adding Z if missing, or replacing space with T
           const dt = new Date(d.created_at);
           const hour = dt.getHours();
-          hoursMap[hour] = [d.result];
+          hoursMap[String(hour)] = [d.result];
         } catch (e) {}
       }
 
@@ -46,8 +46,9 @@ export function StreakCalendar({ data, months = 3 }: StreakCalendarProps) {
           try {
             const dt = new Date(d.created_at);
             const hour = dt.getHours();
-            if (!existing.hours[hour]) existing.hours[hour] = [];
-            existing.hours[hour].push(d.result);
+            const key = String(hour);
+            if (!existing.hours[key]) existing.hours[key] = [];
+            existing.hours[key].push(d.result);
           } catch(e) {}
         }
         // If there is any relapse for the day, mark the day as relapse
@@ -158,7 +159,7 @@ export function StreakCalendar({ data, months = 3 }: StreakCalendarProps) {
         
         <div className="grid grid-cols-6 md:grid-cols-12 gap-2">
           {hoursArray.map((hour) => {
-            const statuses = record.hours[hour] || record.hours[hour.toString()] || [];
+            const statuses = record.hours[String(hour)] || [];
             const hasRelapse = statuses.includes("relapse");
             const hasSuccess = statuses.includes("success");
             

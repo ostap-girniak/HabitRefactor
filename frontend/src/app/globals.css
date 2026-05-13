@@ -188,6 +188,15 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 ::selection {
   background: rgba(255, 77, 0, 0.3);
   color: white;
