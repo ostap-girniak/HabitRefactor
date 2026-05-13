@@ -1,4 +1,4 @@
-# HabitRefactor 🎙️🔥
+# HabitRefactor 🔥
 
 > **Refactor your habits, reforge your identity.**
 
@@ -9,42 +9,52 @@
 ## ✨ Key Features
 
 - **🎙️ Multimodal AI Journaling**  
-  Record audio or video journals directly in the browser. Our AI-driven pipeline (powered by Gemini 2.0 Flash) provides verbatim transcription, emotion detection (radar charts), and key theme extraction.
-  
+  Record audio or video journals directly in the browser. Powered by Gemini 2.0 Flash — verbatim transcription, emotion detection (radar charts), and key theme extraction.
+
 - **🦾 Identity-Based Tracking**  
   Define your *Warrior Identity*. The app focuses on becoming the person who doesn't have the habit, rather than just avoiding the behavior.
 
-- **📊 Emotional Intelligence Radar**  
-  Visual representation of your emotional state over time. Understand the "why" behind your relapses and high-performance days.
+- **🧙 Oracle AI Chat**  
+  Conversational AI assistant with full RAG context — answers based on your journals, check-ins, streaks, and a curated knowledge base of books, science, and videos. Recommends books, YouTube channels, articles, and professional help. Responds in your language (Ukrainian/English).
+
+- **📊 Emotional Intelligence & Deep Analytics**  
+  GitHub-style 365-day heatmap, hourly and weekday risk analysis, streak breakdowns, and trigger pattern visualization.
+
+- **🚨 Smart Notification System**  
+  4 types of behavioral pattern alerts (high-risk hour, dangerous weekday, consecutive relapses, streak break point) + journal danger detection + scheduled reminders. All timezone-aware with cooldown protection.
 
 - **🔥 Pain & Pleasure Projections**  
-  AI-generated insights that project the cost of inaction vs. the reward of consistency, using your own journal entries as context.
+  AI-generated cost-of-inaction projections using your own journal entries as context.
 
-- **🚨 Relapse Interceptor (Web Push)**  
-  A background AI Oracle that monitors your check-ins and stress levels. If you enter the "Danger Zone", it intercepts you with a proactive push notification warning before a relapse occurs.
+- **📚 Knowledge Base RAG**  
+  59+ curated entries (books, YouTube, CBT strategies, Ukrainian resources) with pgvector semantic search. Oracle pulls the most relevant wisdom for your exact situation.
 
-- **📱 Secure, Private & PWA Ready**  
-  Powered by Supabase for enterprise-grade authentication. Installable on mobile devices as a Progressive Web App (PWA) with background sync.
+- **🌍 Ukrainian & English UI**  
+  Full interface localization with an EN/UK switcher in Settings.
+
+- **📱 PWA Ready**  
+  Installable on mobile devices as a Progressive Web App with background sync and iOS Safari support.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Framework:** Next.js (TypeScript)
-- **State Management:** Zustand & TanStack Query (v5)
-- **Styling:** CSS Modules & Radix UI (Premium Dark Mode)
-- **Charts:** Recharts (Animated Emotional Radar)
-- **PWA/Notifications:** Next-PWA & Service Workers
+- **Framework:** Next.js 15 (TypeScript)
+- **State Management:** Zustand & TanStack Query v5
+- **Styling:** Custom CSS (dark-only design system)
+- **Charts:** Recharts
+- **PWA/Notifications:** Service Workers + Web Push API
 - **Auth/DB:** Supabase SSR
 
 ### Backend
 - **Framework:** FastAPI (Python)
-- **AI Engine:** Google Gemini 2.0 Flash (Multimodal)
-- **Storage:** Supabase Storage (S3-compatible)
-- **Database:** Supabase (PostgreSQL with RLS)
-- **Background Tasks:** APScheduler (for Relapse Interceptor)
-- **Push Notifications:** PyWebPush
+- **Primary AI:** Google Gemini 2.0 Flash (multimodal, RAG, embeddings)
+- **Fallback AI:** OpenAI-compatible providers (Groq/DeepSeek)
+- **Vector Search:** pgvector (768-dim embeddings via Gemini)
+- **Database:** Supabase (PostgreSQL + RLS)
+- **Background Workers:** APScheduler (pattern interceptor, relapse alerts, journal scanner)
+- **Push Notifications:** PyWebPush (VAPID)
 
 ---
 
@@ -54,100 +64,89 @@
 - [Node.js 18+](https://nodejs.org/)
 - [Python 3.10+](https://www.python.org/)
 - [Supabase Account](https://supabase.com/)
-- [Google AI Studio Key](https://aistudio.google.com/) (for Gemini)
+- [Google AI Studio Key](https://aistudio.google.com/) (Gemini)
 
 ---
 
 ### 1. Backend Setup
 
-1. **Clone and navigate to backend:**
-   ```bash
-   cd backend
-   ```
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+```
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Edit `backend/.env`:
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+GEMINI_API_KEY=your_google_ai_key
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_EMBEDDING_MODEL=text-embedding-004
+ENABLE_RELAPSE_INTERCEPTOR=true
+ENABLE_PATTERN_INTERCEPTOR=true
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+VAPID_CONTACT_EMAIL=mailto:your_email@example.com
+```
 
-3. **Configure Environment:**
-   Copy template and fill secrets locally (do not commit):
-   ```bash
-   cp .env.example .env
-   ```
-   Then edit `backend/.env`:
-   ```env
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   GEMINI_API_KEY=your_google_ai_key
-   GEMINI_MODEL=gemini-2.0-flash
-   ENABLE_RELAPSE_INTERCEPTOR=true
-   VAPID_PUBLIC_KEY=your_vapid_public_key
-   VAPID_PRIVATE_KEY=your_vapid_private_key
-   VAPID_CONTACT_EMAIL=mailto:your_email@example.com
-   ```
-
-4. **Run the server:**
-   ```bash
-   python -m uvicorn app.main:app --reload
-   ```
-   *The API will be available at [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)*
+```bash
+python -m uvicorn app.main:app --reload
+```
+API docs: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
 
 ---
 
 ### 2. Frontend Setup
 
-1. **Navigate to frontend:**
-   ```bash
-   cd frontend
-   ```
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+Edit `frontend/.env.local`:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
+```
 
-3. **Configure Environment:**
-   Copy template and fill values locally:
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   Then edit `frontend/.env.local`:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-   NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
-   NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
-   ```
-
-4. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
-   *The app will be available at [http://localhost:3000](http://localhost:3000)*
+```bash
+npm run dev
+```
+App: [http://localhost:3000](http://localhost:3000)
 
 ---
 
 ## 🏗️ Database Setup
 
-Ensure your Supabase database has the required schema. You can run the SQL scripts found in `/database/` sequentially:
-1. `001_tables.sql` — Core tables.
-2. `002_rls.sql` — Row Level Security policies.
-3. `003...` to `007_relapse_interceptor_upgrade.sql` — Feature migrations and upgrades (run all files in order).
-4. `seed_knowledge_base.sql` — Initial patterns for AI analysis.
+Run SQL scripts from `/database/` in Supabase SQL Editor in order:
+
+| File | Description |
+|------|-------------|
+| `migration.sql` | Full schema (run this first on a fresh DB) |
+| `007_relapse_interceptor_upgrade.sql` | Relapse interceptor tables |
+| `008_notification_history.sql` | Notification history |
+| `009_oracle_chat.sql` | Oracle chat tables |
+| `010_oracle_sessions.sql` | Oracle session management |
+| `seed_knowledge_base.sql` | English knowledge base (59+ entries) |
+| `011_ukrainian_knowledge_base.sql` | Ukrainian knowledge base (26 entries) |
+
+After inserting knowledge base data, generate embeddings via the backend (see API docs).
 
 ---
 
-## 🔐 Security Before Public Git
+## 🔐 Security
 
-- Never commit `backend/.env` or `frontend/.env.local`.
-- Use only `.env.example` and `.env.local.example` with placeholder values.
-- If any real keys were ever stored in git history, rotate them in providers (Supabase/Gemini/Groq) before publishing.
-- After cloning on another PC, recreate local env files from examples and run the app normally.
+- Never commit `backend/.env` or `frontend/.env.local`
+- Use only `.env.example` / `.env.local.example` with placeholder values
+- If real keys were ever stored in git history, rotate them before publishing
 
 ---
 
 ## 📜 License
 
-Project developed for Bachelours University Work. All rights reserved. 2026.
+Project developed for Bachelor's University Work. All rights reserved. 2026.
