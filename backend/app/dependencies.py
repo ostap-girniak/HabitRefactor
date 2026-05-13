@@ -70,5 +70,11 @@ async def get_authenticated_client(
 ) -> AsyncClient:
     """Get singleton client and set session for RLS scope."""
     client = await get_supabase_client(settings)
-    await client.auth.set_session(credentials.credentials, "")
+    try:
+        await client.auth.set_session(credentials.credentials, "")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Session setup failed: {str(e)}",
+        )
     return client

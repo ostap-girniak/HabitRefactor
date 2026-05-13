@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from zoneinfo import ZoneInfo
 
 from app.config import get_settings
 from app.dependencies import get_supabase_admin
-from app.notifications.push import send_web_push
+from app.notifications.push import send_web_push, save_notification_to_history
 from app.stats.oracle import compute_oracle
 
 _scheduler: Optional[AsyncIOScheduler] = None
@@ -37,22 +37,356 @@ def _is_quiet_hours(
     if quiet_start is None or quiet_end is None:
         return False
     t = now_local.timetz().replace(tzinfo=None)
-    # Same-day window
     if quiet_start <= quiet_end:
         return quiet_start <= t <= quiet_end
-    # Overnight window (e.g. 22:00 -> 07:00)
     return t >= quiet_start or t <= quiet_end
 
+
+# ---- Pattern Analysis Helpers ----
+
+def _compute_hourly_pattern(checkins: list[dict], tz: ZoneInfo) -> dict:
+    """Hourly relapse stats in user's local timezone."""
+    hourly = {i: {"success": 0, "relapse": 0, "total": 0} for i in range(24)}
+    for c in checkins:
+        ts = _parse_ts(c.get("created_at"))
+        if not ts:
+            continue
+        try:
+            local_ts = ts.astimezone(tz)
+        except Exception:
+            local_ts = ts
+        h = local_ts.hour
+        hourly[h]["total"] += 1
+        if c.get("result") == "relapse":
+            hourly[h]["relapse"] += 1
+        else:
+            hourly[h]["success"] += 1
+    return hourly
+
+
+def _compute_weekday_pattern(checkins: list[dict], tz: ZoneInfo) -> dict:
+    """Weekday relapse stats in user's local timezone. {0=Mon...6=Sun}"""
+    weekday: dict[int, dict] = {i: {"success": 0, "relapse": 0, "total": 0} for i in range(7)}
+    for c in checkins:
+        ts = _parse_ts(c.get("created_at"))
+        if not ts:
+            continue
+        try:
+            local_ts = ts.astimezone(tz)
+        except Exception:
+            local_ts = ts
+        wd = local_ts.weekday()  # 0=Mon
+        weekday[wd]["total"] += 1
+        if c.get("result") == "relapse":
+            weekday[wd]["relapse"] += 1
+        else:
+            weekday[wd]["success"] += 1
+    return weekday
+
+
+def _check_streak_pattern(checkins: list[dict]) -> Optional[dict]:
+    """
+    Detect if user's current check-in streak is approaching their
+    historically typical break point.
+    """
+    valid = [c for c in checkins if _parse_ts(c.get("created_at"))]
+    if len(valid) < 15:
+        return None
+
+    sorted_checkins = sorted(valid, key=lambda c: _parse_ts(c.get("created_at")))  # type: ignore[arg-type]
+
+    # Walk forward: collect lengths of streaks that ended in relapse
+    historical_breaks: list[int] = []
+    run = 0
+    for c in sorted_checkins:
+        if c.get("result") == "relapse":
+            if run > 0:
+                historical_breaks.append(run)
+            run = 0
+        else:
+            run += 1
+
+    if len(historical_breaks) < 3:
+        return None
+
+    current_streak = run  # consecutive successes after last relapse
+    avg_break = sum(historical_breaks) / len(historical_breaks)
+
+    # Warn when within ±2 check-ins of average break point
+    if current_streak >= 3 and abs(current_streak - avg_break) <= 2:
+        return {
+            "type": "pattern_streak",
+            "title": "⚠️ Streak Danger Zone",
+            "body": (
+                f"Your {current_streak}-check-in streak is approaching "
+                f"your historical break point (~{int(avg_break)}). "
+                "You've been here before. Stay sharp."
+            ),
+            "url": "/dashboard",
+            "tag": "pattern-streak-risk",
+        }
+    return None
+
+
+def _top_trigger_at_hour(checkins: list[dict], target_hour: int, tz: ZoneInfo) -> Optional[str]:
+    """Return the most common relapse_trigger at a specific local hour."""
+    counts: dict[str, int] = {}
+    for c in checkins:
+        if c.get("result") != "relapse":
+            continue
+        ts = _parse_ts(c.get("created_at"))
+        if not ts:
+            continue
+        try:
+            h = ts.astimezone(tz).hour
+        except Exception:
+            h = ts.hour
+        if h == target_hour and c.get("relapse_trigger"):
+            t = c["relapse_trigger"]
+            counts[t] = counts.get(t, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=lambda k: counts[k])
+
+
+async def _analyze_and_notify_patterns(
+    admin_client,
+    settings,
+    now: datetime,
+    user_id: str,
+    subs: list[dict],
+) -> None:
+    """Run all pattern checks for one user and send relevant pre-emptive notifications."""
+
+    # Resolve user timezone
+    tz_name = "UTC"
+    try:
+        prof = await (
+            admin_client.table("profiles")
+            .select("timezone")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        tz_name = (prof.data or {}).get("timezone") or "UTC"
+    except Exception:
+        pass
+
+    try:
+        tz_info = ZoneInfo(tz_name)
+        now_local = now.astimezone(tz_info)
+    except Exception:
+        tz_info = ZoneInfo("UTC")
+        now_local = now
+
+    # Fetch last 90 days of check-ins
+    ninety_days_ago = now - timedelta(days=90)
+    try:
+        checkins_resp = await (
+            admin_client.table("checkins")
+            .select("created_at, result, mood_before, stress_level, relapse_trigger, habit_id")
+            .eq("user_id", user_id)
+            .gte("created_at", ninety_days_ago.isoformat())
+            .order("created_at", desc=True)
+            .limit(500)
+            .execute()
+        )
+        checkins = checkins_resp.data or []
+    except Exception as e:
+        print(f"[WARN] Pattern: failed checkins fetch for {user_id}: {e}")
+        return
+
+    if len(checkins) < 15:
+        return  # Not enough history for reliable patterns
+
+    # Cooldown: which pattern types were already sent in the last 6 hours?
+    six_hours_ago = now - timedelta(hours=6)
+    try:
+        hist_resp = await (
+            admin_client.table("notification_history")
+            .select("notification_type")
+            .eq("user_id", user_id)
+            .in_("notification_type", ["pattern_hourly", "pattern_weekday", "pattern_consecutive", "pattern_streak"])
+            .gte("created_at", six_hours_ago.isoformat())
+            .limit(20)
+            .execute()
+        )
+        recent_types = {r["notification_type"] for r in (hist_resp.data or [])}
+    except Exception:
+        recent_types = set()
+
+    notifications_to_send: list[dict] = []
+
+    # 1. Hourly relapse pattern: warn 15–35 min before the high-risk hour
+    if "pattern_hourly" not in recent_types:
+        hourly = _compute_hourly_pattern(checkins, tz_info)
+        current_minutes = now_local.hour * 60 + now_local.minute
+
+        for h, stats in hourly.items():
+            if stats["total"] < 5 or stats["relapse"] < 3:
+                continue
+            relapse_rate = stats["relapse"] / stats["total"]
+            if relapse_rate < 0.5:
+                continue
+            # Minutes until this hour starts
+            diff = h * 60 - current_minutes
+            if diff < 0:
+                diff += 24 * 60  # wrap to next occurrence
+            if 15 <= diff <= 35:
+                trigger = _top_trigger_at_hour(checkins, h, tz_info)
+                trigger_hint = f" Watch out for: {trigger}." if trigger else ""
+                notifications_to_send.append({
+                    "type": "pattern_hourly",
+                    "title": "⚡ High-Risk Hour Approaching",
+                    "body": (
+                        f"You tend to relapse around {h}:00. "
+                        f"It's {now_local.strftime('%H:%M')} — stay locked in for the next 30 minutes.{trigger_hint}"
+                    ),
+                    "url": "/dashboard",
+                    "tag": "pattern-hourly-risk",
+                })
+                break  # Only one hourly warning per tick
+
+    # 2. Day-of-week risk: send morning warning (8–10am) on historically high-risk days
+    if "pattern_weekday" not in recent_types and 8 <= now_local.hour <= 10:
+        weekday_stats = _compute_weekday_pattern(checkins, tz_info)
+        total_relapses = sum(v["relapse"] for v in weekday_stats.values())
+        if total_relapses > 0:
+            today_wd = now_local.weekday()
+            today_stats = weekday_stats[today_wd]
+            overall_avg_rate = total_relapses / max(sum(v["total"] for v in weekday_stats.values()), 1)
+            today_rate = today_stats["relapse"] / max(today_stats["total"], 1)
+
+            if today_stats["total"] >= 3 and today_rate >= 0.45 and today_rate > overall_avg_rate * 1.4:
+                day_name = now_local.strftime("%A")
+                notifications_to_send.append({
+                    "type": "pattern_weekday",
+                    "title": f"📅 {day_name} Risk Day",
+                    "body": f"{day_name}s have been historically challenging for you. Prepare your defense today.",
+                    "url": "/checkin",
+                    "tag": "pattern-weekday-risk",
+                })
+
+    # 3. Consecutive relapses: 2+ in the last 24 hours
+    if "pattern_consecutive" not in recent_types:
+        one_day_ago = now - timedelta(hours=24)
+        recent_relapses = [
+            c for c in checkins
+            if c.get("result") == "relapse"
+            and (_parse_ts(c.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)) >= one_day_ago
+        ]
+        if len(recent_relapses) >= 2:
+            notifications_to_send.append({
+                "type": "pattern_consecutive",
+                "title": "🛡️ Multiple Relapses Detected",
+                "body": (
+                    f"{len(recent_relapses)} relapses in the last 24 hours. "
+                    "One bad day doesn't have to become two. Open your War Room."
+                ),
+                "url": "/dashboard",
+                "tag": "pattern-consecutive",
+            })
+
+    # 4. Streak break pattern: approaching historical break point
+    if "pattern_streak" not in recent_types:
+        streak_warning = _check_streak_pattern(checkins)
+        if streak_warning:
+            notifications_to_send.append(streak_warning)
+
+    # Send all triggered notifications
+    for notif in notifications_to_send:
+        sent_any = False
+        for sub in subs:
+            err = await send_web_push(
+                settings=settings,
+                subscription=sub,
+                title=notif["title"],
+                body=notif["body"],
+                url=notif["url"],
+                tag=notif["tag"],
+            )
+            if err is None:
+                sent_any = True
+            elif err == "subscription_gone":
+                try:
+                    await (
+                        admin_client.table("push_subscriptions")
+                        .update({"is_active": False})
+                        .eq("endpoint", sub.get("endpoint"))
+                        .execute()
+                    )
+                except Exception:
+                    pass
+
+        if sent_any:
+            await save_notification_to_history(
+                client=admin_client,
+                user_id=user_id,
+                title=notif["title"],
+                body=notif["body"],
+                notification_type=notif["type"],
+                url=notif["url"],
+            )
+            print(f"[PUSH] Pattern notification sent user={user_id} type={notif['type']}")
+
+
+async def _run_pattern_interceptor_tick() -> None:
+    """
+    Runs every 15 minutes. Fetches all users with active push subscriptions
+    and runs behavioral pattern analysis for each, sending pre-emptive alerts.
+    """
+    settings = get_settings()
+    if not settings.enable_pattern_interceptor:
+        return
+
+    try:
+        admin_client = await get_supabase_admin()
+    except Exception as e:
+        print(f"[WARN] Pattern interceptor: admin client error: {e}")
+        return
+
+    try:
+        subs_resp = await (
+            admin_client.table("push_subscriptions")
+            .select("user_id, endpoint, p256dh_key, auth_key, keys, is_active")
+            .eq("is_active", True)
+            .limit(1000)
+            .execute()
+        )
+        all_subs = subs_resp.data or []
+    except Exception as e:
+        print(f"[WARN] Pattern interceptor: failed to fetch subscriptions: {e}")
+        return
+
+    # Group by user
+    user_subs: dict[str, list[dict]] = {}
+    for sub in all_subs:
+        uid = sub.get("user_id")
+        if uid:
+            user_subs.setdefault(uid, []).append(sub)
+
+    now = _utcnow()
+    for user_id, subs in user_subs.items():
+        try:
+            await _analyze_and_notify_patterns(admin_client, settings, now, user_id, subs)
+        except Exception as e:
+            print(f"[WARN] Pattern analysis failed for user={user_id}: {e}")
+
+
+# ---- Relapse Interceptor ----
 
 async def _run_relapse_interceptor_tick() -> None:
     settings = get_settings()
     if not settings.enable_relapse_interceptor:
         return
 
-    admin_client = await get_supabase_admin()
+    try:
+        admin_client = await get_supabase_admin()
+    except Exception as e:
+        print(f"[WARN] Relapse interceptor: admin client error: {e}")
+        return
 
     try:
-        # Smart reminders of type danger_zone act as opt-in for the interceptor
         reminders_resp = await (
             admin_client.table("reminders")
             .select(
@@ -68,8 +402,6 @@ async def _run_relapse_interceptor_tick() -> None:
         if not reminders:
             return
     except Exception as e:
-        # If the DB schema is still on the legacy `migration.sql` format,
-        # the reminders table won't have these columns. Avoid crashing the app.
         print(f"[WARN] Relapse Interceptor disabled due to schema mismatch: {e}")
         return
 
@@ -90,7 +422,6 @@ async def _run_relapse_interceptor_tick() -> None:
         user_id = str(r["user_id"])
         habit_id = str(r["habit_id"]) if r.get("habit_id") else None
 
-        # quiet hours (per reminder) in user's timezone (fallback UTC)
         tz_name = "UTC"
         try:
             prof = (
@@ -171,7 +502,6 @@ async def _run_relapse_interceptor_tick() -> None:
             )
             subs = subs_resp.data or []
         except Exception:
-            # Legacy schema fallback: endpoint + keys JSONB, no is_active
             try:
                 subs_resp = await (
                     admin_client.table("push_subscriptions")
@@ -218,6 +548,8 @@ async def _run_relapse_interceptor_tick() -> None:
             )
 
 
+# ---- Scheduled Reminders ----
+
 async def _run_scheduled_reminders_tick() -> None:
     """
     Tick for time-based (non-smart) reminders.
@@ -228,7 +560,11 @@ async def _run_scheduled_reminders_tick() -> None:
     if not settings.enable_scheduled_reminders:
         return
 
-    admin_client = await get_supabase_admin()
+    try:
+        admin_client = await get_supabase_admin()
+    except Exception as e:
+        print(f"[WARN] Scheduled reminders: admin client error: {e}")
+        return
 
     try:
         reminders_resp = await (
@@ -262,7 +598,6 @@ async def _run_scheduled_reminders_tick() -> None:
 
         user_id = str(r["user_id"])
 
-        # Resolve user timezone
         tz_name = "UTC"
         try:
             prof = (
@@ -281,16 +616,13 @@ async def _run_scheduled_reminders_tick() -> None:
         except Exception:
             now_local = now
 
-        # Check day of week (0=Sunday ... 6=Saturday in our schema)
         days = r.get("days_of_week")
         if days and isinstance(days, list):
-            # Python: Monday=0 ... Sunday=6.  Our DB: 0=Sunday, 1=Monday ... 6=Saturday
             py_weekday = now_local.weekday()  # 0=Mon
-            db_weekday = (py_weekday + 1) % 7  # shift: Mon=1, Tue=2, ..., Sun=0
+            db_weekday = (py_weekday + 1) % 7  # shift: Mon=1, ..., Sun=0
             if db_weekday not in days:
                 continue
 
-        # Check if current time is within ±1 min of reminder time
         current_time = now_local.timetz().replace(tzinfo=None)
         diff_minutes = abs(
             (current_time.hour * 60 + current_time.minute)
@@ -299,7 +631,6 @@ async def _run_scheduled_reminders_tick() -> None:
         if diff_minutes > 1:
             continue
 
-        # Cooldown: don't send if already sent today
         last_sent = _parse_ts(r.get("last_sent_at"))
         if last_sent:
             try:
@@ -309,7 +640,6 @@ async def _run_scheduled_reminders_tick() -> None:
             if last_sent_local.date() == now_local.date():
                 continue
 
-        # Fetch push subscriptions
         subs: list[dict] = []
         try:
             subs_resp = await (
@@ -341,7 +671,6 @@ async def _run_scheduled_reminders_tick() -> None:
         body = (r.get("message") or "").strip() or "Time to check in, warrior."
         reminder_type = r.get("reminder_type", "custom")
 
-        # Choose URL based on type
         url_map = {
             "morning_checkin": "/checkin",
             "evening_review": "/dashboard",
@@ -381,7 +710,8 @@ async def _run_scheduled_reminders_tick() -> None:
             )
 
 
-# Keywords that indicate the user is struggling
+# ---- Journal Alert ----
+
 _DANGER_KEYWORDS = [
     "temptation", "tempt", "urge", "craving", "relapse", "slip", "fail",
     "gave in", "couldn't resist", "struggling", "weak", "porn", "drink",
@@ -390,6 +720,7 @@ _DANGER_KEYWORDS = [
     "спокуса", "зрив", "не втримав", "знову", "слабкість", "тяга",
     "зламався", "хочеться", "дуже хочу", "не можу", "важко",
 ]
+
 
 async def _run_journal_alert_tick() -> None:
     """
@@ -401,9 +732,8 @@ async def _run_journal_alert_tick() -> None:
     five_mins_ago = now - timedelta(minutes=5)
 
     try:
-        admin_client = get_supabase_admin()
-        
-        # 1. Fetch entries from the last 5 minutes
+        admin_client = await get_supabase_admin()
+
         resp = await (
             admin_client.table("journal_entries")
             .select("id, user_id, raw_text, transcript, mood_rating")
@@ -417,25 +747,23 @@ async def _run_journal_alert_tick() -> None:
         for entry in entries:
             text = (entry.get("raw_text") or "") + " " + (entry.get("transcript") or "")
             text_lower = text.lower().strip()
-            
+
             if not text_lower:
                 continue
 
-            # 2. Analyze
             found_keywords = [kw for kw in _DANGER_KEYWORDS if kw in text_lower]
             mood = entry.get("mood_rating")
             is_danger = len(found_keywords) >= 1 or (mood is not None and mood <= 3)
 
             if not is_danger:
-                continue # Do nothing if no danger
-                
-            # 3. Danger detected! Send Push
+                continue
+
             title = "⚠️ Journal Danger Detected"
             snippet = text[:80].strip() + ("..." if len(text) > 80 else "")
             body = f"Your latest journal entry indicates a struggle: \"{snippet}\". Stay strong, Warrior!"
             notification_type = "danger_zone"
             url = "/dashboard"
-            
+
             subs_resp = await (
                 admin_client.table("push_subscriptions")
                 .select("endpoint, p256dh_key, auth_key, keys, is_active")
@@ -445,7 +773,7 @@ async def _run_journal_alert_tick() -> None:
                 .execute()
             )
             subs = subs_resp.data or []
-            
+
             for sub in subs:
                 err = await send_web_push(
                     settings=settings,
@@ -462,9 +790,7 @@ async def _run_journal_alert_tick() -> None:
                         .eq("endpoint", sub.get("endpoint"))
                         .execute()
                     )
-            
-            # 4. Save to history
-            from app.notifications.push import save_notification_to_history
+
             await save_notification_to_history(
                 client=admin_client,
                 user_id=entry["user_id"],
@@ -476,7 +802,7 @@ async def _run_journal_alert_tick() -> None:
                     "journal_entry_id": str(entry["id"]),
                     "found_keywords": found_keywords,
                     "mood_rating": mood,
-                    "is_auto": True
+                    "is_auto": True,
                 },
             )
             print(f"[PUSH] Sent auto-danger journal alert to user {entry['user_id']}")
@@ -486,6 +812,8 @@ async def _run_journal_alert_tick() -> None:
         import traceback
         traceback.print_exc()
 
+
+# ---- Scheduler Lifecycle ----
 
 async def start_workers() -> None:
     """
@@ -499,8 +827,11 @@ async def start_workers() -> None:
     settings = get_settings()
     has_relapse = settings.enable_relapse_interceptor
     has_scheduled = settings.enable_scheduled_reminders
+    has_pattern = settings.enable_pattern_interceptor
+    has_vapid = bool(settings.vapid_private_key and settings.vapid_public_key)
 
-    if not (has_relapse or has_scheduled):
+    # Start scheduler whenever any worker is active or push is configured
+    if not (has_relapse or has_scheduled or has_pattern or has_vapid):
         return
 
     scheduler = AsyncIOScheduler(timezone="UTC")
@@ -508,8 +839,8 @@ async def start_workers() -> None:
     if has_relapse:
         interval = max(5, int(settings.relapse_interceptor_interval_minutes))
 
-        def _kickoff_relapse():
-            asyncio.create_task(_run_relapse_interceptor_tick())
+        async def _kickoff_relapse():
+            await _run_relapse_interceptor_tick()
 
         scheduler.add_job(
             _kickoff_relapse,
@@ -525,8 +856,8 @@ async def start_workers() -> None:
     if has_scheduled:
         sched_interval = max(1, int(settings.scheduled_reminders_interval_minutes))
 
-        def _kickoff_scheduled():
-            asyncio.create_task(_run_scheduled_reminders_tick())
+        async def _kickoff_scheduled():
+            await _run_scheduled_reminders_tick()
 
         scheduler.add_job(
             _kickoff_scheduled,
@@ -539,30 +870,49 @@ async def start_workers() -> None:
             replace_existing=True,
         )
 
-    # Journal Alert Auto-Check (Every 5 minutes)
-    def _kickoff_journal_alert():
-        asyncio.create_task(_run_journal_alert_tick())
+    if has_pattern:
+        pattern_interval = max(5, int(settings.pattern_interceptor_interval_minutes))
 
-    scheduler.add_job(
-        _kickoff_journal_alert,
-        trigger="interval",
-        minutes=5,
-        id="journal-alert-check",
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
-    )
+        async def _kickoff_pattern():
+            await _run_pattern_interceptor_tick()
+
+        scheduler.add_job(
+            _kickoff_pattern,
+            trigger="interval",
+            minutes=pattern_interval,
+            id="pattern-interceptor",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+            replace_existing=True,
+        )
+
+    # Journal alert runs whenever push is configured
+    if has_vapid:
+        async def _kickoff_journal_alert():
+            await _run_journal_alert_tick()
+
+        scheduler.add_job(
+            _kickoff_journal_alert,
+            trigger="interval",
+            minutes=5,
+            id="journal-alert-check",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
 
     scheduler.start()
     _scheduler = scheduler
 
-    # First run ASAP
     if has_relapse:
         asyncio.create_task(_run_relapse_interceptor_tick())
     if has_scheduled:
         asyncio.create_task(_run_scheduled_reminders_tick())
-    
-    asyncio.create_task(_run_journal_alert_tick())
+    if has_pattern:
+        asyncio.create_task(_run_pattern_interceptor_tick())
+    if has_vapid:
+        asyncio.create_task(_run_journal_alert_tick())
 
 
 async def stop_workers() -> None:
@@ -573,4 +923,3 @@ async def stop_workers() -> None:
         _scheduler.shutdown(wait=False)
     finally:
         _scheduler = None
-

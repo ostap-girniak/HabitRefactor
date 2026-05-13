@@ -13,6 +13,7 @@ import {
   Archive,
   Copy,
 } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import {
   useIdentityStatements,
   useCreateIdentityStatement,
@@ -42,6 +43,7 @@ interface IdentityStatementsResponse {
 }
 
 export default function IdentityPage() {
+  const t = useT();
   const { data: statements, isLoading } = useIdentityStatements();
   const createStatement = useCreateIdentityStatement();
   const affirmIdentity = useAffirmIdentity();
@@ -155,7 +157,7 @@ export default function IdentityPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-[var(--accent-fire)] border-t-transparent rounded-full animate-spin" />
         <p className="text-[var(--text-secondary)] font-medium animate-pulse">
-          Loading your identity shifts...
+          {t.identity_loading}
         </p>
       </div>
     );
@@ -177,12 +179,12 @@ export default function IdentityPage() {
             Identity Shift Lab 🛡️
           </h1>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
-            You don&apos;t break habits. You become someone who doesn&apos;t have them.
+            {t.identity_subtitle}
           </p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-fire flex items-center gap-2 text-sm">
           <Plus className="w-4 h-4" />
-          New Identity
+          {t.identity_new}
         </button>
       </div>
 
@@ -205,33 +207,33 @@ export default function IdentityPage() {
         <div className="card space-y-4 animate-slide-up">
           <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Shield className="w-5 h-5 text-[var(--accent-fire)]" />
-            Declare a New Identity
+            {t.identity_declare_title}
           </h3>
           <div>
-            <label className="block text-xs text-[var(--accent-danger)] uppercase font-bold mb-1">❌ Old Identity (Who you WERE)</label>
+            <label className="block text-xs text-[var(--accent-danger)] uppercase font-bold mb-1">{t.identity_old_label}</label>
             <textarea
               value={oldIdentity}
               onChange={(e) => setOldIdentity(e.target.value)}
               className="input-forge min-h-[60px] resize-none"
-              placeholder="I am someone who smokes when stressed..."
+              placeholder={t.identity_old_placeholder}
             />
           </div>
           <div>
-            <label className="block text-xs text-[var(--accent-success)] uppercase font-bold mb-1">🛡️ New Identity (Who you ARE becoming)</label>
+            <label className="block text-xs text-[var(--accent-success)] uppercase font-bold mb-1">{t.identity_new_label}</label>
             <textarea
               value={newIdentity}
               onChange={(e) => setNewIdentity(e.target.value)}
               className="input-forge min-h-[60px] resize-none"
-              placeholder="I am a person who breathes clean air and values their health..."
+              placeholder={t.identity_new_placeholder}
             />
           </div>
           <div>
-            <label className="block text-xs text-[var(--accent-fire)] uppercase font-bold mb-1">🔥 Daily Affirmation (Say it every day)</label>
+            <label className="block text-xs text-[var(--accent-fire)] uppercase font-bold mb-1">{t.identity_affirmation_label}</label>
             <textarea
               value={dailyAffirmation}
               onChange={(e) => setDailyAffirmation(e.target.value)}
               className="input-forge min-h-[60px] resize-none"
-              placeholder="I am a calm and disciplined person who protects my future self."
+              placeholder={t.identity_affirmation_placeholder}
             />
           </div>
           <div className="flex gap-3">
@@ -240,9 +242,9 @@ export default function IdentityPage() {
               disabled={createStatement.isPending || !oldIdentity.trim() || !newIdentity.trim() || !dailyAffirmation.trim()}
               className="btn-fire flex-1 disabled:opacity-50"
             >
-              {createStatement.isPending ? "Forging..." : "Forge This Identity"}
+              {createStatement.isPending ? t.identity_forging : t.identity_forge_cta}
             </button>
-            <button onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button>
+            <button onClick={() => setShowForm(false)} className="btn-ghost">{t.cancel}</button>
           </div>
         </div>
       )}
@@ -254,13 +256,13 @@ export default function IdentityPage() {
             <Swords className="w-10 h-10 text-[var(--accent-fire)]" />
           </div>
           <div className="max-w-md space-y-2">
-            <h2 className="text-2xl font-black text-[var(--text-primary)]">No Identities Declared</h2>
+            <h2 className="text-2xl font-black text-[var(--text-primary)]">{t.identity_empty_title}</h2>
             <p className="text-[var(--text-secondary)]">
-              Real change starts with WHO you decide to be. Declare your first identity shift — your old self dies today.
+              {t.identity_empty_desc}
             </p>
           </div>
           <button onClick={() => setShowForm(true)} className="btn-fire px-8 py-4 text-lg flex items-center gap-2">
-            <Shield className="w-5 h-5" /> Declare My Identity
+            <Shield className="w-5 h-5" /> {t.identity_declare_cta}
           </button>
         </div>
       )}
@@ -276,7 +278,7 @@ export default function IdentityPage() {
                   <span className="text-sm">❌</span>
                 </div>
                 <div>
-                  <div className="text-[10px] text-[var(--accent-danger)] uppercase font-bold tracking-wide mb-0.5">Old Identity</div>
+                  <div className="text-[10px] text-[var(--accent-danger)] uppercase font-bold tracking-wide mb-0.5">{t.identity_old_tag}</div>
                   <p className="text-sm text-[var(--text-secondary)] line-through opacity-60">{stmt.old_identity}</p>
                 </div>
               </div>
@@ -291,7 +293,7 @@ export default function IdentityPage() {
                   <Shield className="w-4 h-4 text-[var(--accent-success)]" />
                 </div>
                 <div>
-                  <div className="text-[10px] text-[var(--accent-success)] uppercase font-bold tracking-wide mb-0.5">New Identity</div>
+                  <div className="text-[10px] text-[var(--accent-success)] uppercase font-bold tracking-wide mb-0.5">{t.identity_new_tag}</div>
                   <p className="text-sm text-[var(--text-primary)] font-semibold">{stmt.new_identity}</p>
                 </div>
               </div>
@@ -300,7 +302,7 @@ export default function IdentityPage() {
             {/* Belief Score */}
             <div className="bg-[var(--bg-elevated)] rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[var(--text-muted)] uppercase font-bold">Belief Score</span>
+                <span className="text-xs text-[var(--text-muted)] uppercase font-bold">{t.identity_belief_score}</span>
                 <span className={`text-lg font-black ${
                   (stmt.belief_score || 0) >= 70 ? "text-[var(--accent-success)]" :
                   (stmt.belief_score || 0) >= 40 ? "text-[var(--accent-warning)]" :
@@ -321,21 +323,21 @@ export default function IdentityPage() {
                 />
               </div>
               <div className="flex items-center justify-between mt-2 text-xs text-[var(--text-muted)]">
-                <span>🔥 {stmt.affirmation_streak || 0} day affirmation streak</span>
-                <span>Target: 100%</span>
+                <span>🔥 {stmt.affirmation_streak || 0} {t.identity_affirmation_streak}</span>
+                <span>{t.identity_target}: 100%</span>
               </div>
             </div>
 
             {/* Proof Points */}
             <div className="bg-[var(--bg-elevated)] rounded-xl p-3 mb-4">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="text-xs text-[var(--text-muted)] uppercase font-bold">Daily affirmation</div>
+                <div className="text-xs text-[var(--text-muted)] uppercase font-bold">{t.identity_daily_affirmation}</div>
                 <button
                   onClick={() => handleCopyAffirmation((stmt.daily_affirmation || `I am ${stmt.new_identity}`).trim())}
                   className="btn-ghost px-2 py-1 text-xs flex items-center gap-1"
                 >
                   <Copy className="w-3 h-3" />
-                  Copy
+                  {t.copy}
                 </button>
               </div>
               <p className="text-sm text-[var(--text-primary)] font-medium">
@@ -347,7 +349,7 @@ export default function IdentityPage() {
               <div className="mb-4">
                 <div className="text-xs text-[var(--text-muted)] uppercase font-bold mb-2 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-[var(--accent-success)]" />
-                  Proof From Your Data
+                  {t.identity_proof_data}
                 </div>
                 <div className="space-y-1.5">
                   {stmt.proof_points.map((proof, j) => (
@@ -361,13 +363,13 @@ export default function IdentityPage() {
             )}
 
             <div className="mb-4 space-y-2">
-              <div className="text-xs text-[var(--text-muted)] uppercase font-bold">Add proof point</div>
+              <div className="text-xs text-[var(--text-muted)] uppercase font-bold">{t.identity_add_proof}</div>
               <div className="flex gap-2">
                 <input
                   value={proofDrafts[stmt.id] || ""}
                   onChange={(e) => setProofDrafts((prev) => ({ ...prev, [stmt.id]: e.target.value }))}
                   className="input-forge flex-1"
-                  placeholder="Example: I handled stress without smoking after lunch."
+                  placeholder={t.identity_proof_placeholder}
                 />
                 <button
                   onClick={() => handleAddProofPoint(stmt)}
@@ -386,7 +388,7 @@ export default function IdentityPage() {
               className="btn-success w-full flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Sparkles className="w-5 h-5" />
-              {affirmIdentity.isPending && selectedStatement === stmt.id ? "Affirming..." : "I Affirm This Identity Today"}
+              {affirmIdentity.isPending && selectedStatement === stmt.id ? t.identity_affirming : t.identity_affirm_cta}
             </button>
             <button
               onClick={() => handleGenerateNow(stmt.id)}
@@ -394,7 +396,7 @@ export default function IdentityPage() {
               className="btn-ghost w-full mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Sparkles className="w-4 h-4" />
-              {generateAffirmation.isPending ? "Generating..." : "Generate affirmation now"}
+              {generateAffirmation.isPending ? t.identity_generating : t.identity_generate_affirmation}
             </button>
             <button
               onClick={() => handleArchiveStatement(stmt.id)}
@@ -402,7 +404,7 @@ export default function IdentityPage() {
               className="btn-ghost w-full mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Archive className="w-4 h-4" />
-              Archive identity
+              {t.identity_archive}
             </button>
           </div>
         ))}
@@ -416,7 +418,7 @@ export default function IdentityPage() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent-success)] to-[#00C853] flex items-center justify-center mx-auto mb-4">
                 <Sparkles className="w-8 h-8 text-black" />
               </div>
-              <h3 className="text-xl font-black text-[var(--text-primary)]">Your Daily Affirmation</h3>
+              <h3 className="text-xl font-black text-[var(--text-primary)]">{t.identity_modal_title}</h3>
             </div>
 
             <div className="space-y-4">
@@ -427,12 +429,12 @@ export default function IdentityPage() {
               </div>
 
               <div className="bg-[var(--accent-success-subtle)] rounded-xl p-4">
-                <div className="text-xs text-[var(--accent-success)] uppercase font-bold mb-1">📊 Proof</div>
+                <div className="text-xs text-[var(--accent-success)] uppercase font-bold mb-1">{t.identity_proof_label}</div>
                 <p className="text-sm text-[var(--text-secondary)]">{affirmationData.proof_reminder}</p>
               </div>
 
               <div className="bg-[var(--accent-fire-subtle)] rounded-xl p-4">
-                <div className="text-xs text-[var(--accent-fire)] uppercase font-bold mb-1">⚡ Today&apos;s Challenge</div>
+                <div className="text-xs text-[var(--accent-fire)] uppercase font-bold mb-1">{t.identity_challenge_label}</div>
                 <p className="text-sm text-[var(--text-secondary)]">{affirmationData.challenge}</p>
               </div>
             </div>
@@ -441,7 +443,7 @@ export default function IdentityPage() {
               onClick={() => setShowAffirmation(false)}
               className="btn-fire w-full mt-6"
             >
-              I Am This Person. 🔥
+              {t.identity_confirm_cta}
             </button>
           </div>
         </div>

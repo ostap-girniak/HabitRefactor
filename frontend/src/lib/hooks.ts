@@ -300,13 +300,24 @@ export function useGenerateManifesto() {
   });
 }
 
-export function useOracleHistory(limit?: number) {
+export function useOracleSessions() {
   return useQuery({
-    queryKey: ["ai", "oracle", "history", limit],
+    queryKey: ["ai", "oracle", "sessions"],
     queryFn: async () => {
-      const { data } = await aiApi.getOracleHistory(limit);
+      const { data } = await aiApi.getOracleSessions();
+      return (data as any).sessions || [];
+    },
+  });
+}
+
+export function useOracleHistory(sessionId?: string | null, limit?: number) {
+  return useQuery({
+    queryKey: ["ai", "oracle", "history", sessionId, limit],
+    queryFn: async () => {
+      const { data } = await aiApi.getOracleHistory(limit, sessionId ?? undefined);
       return (data as any).history || [];
     },
+    enabled: !!sessionId,
   });
 }
 
@@ -314,10 +325,11 @@ export function useOracleChat() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { message: string; include_history?: boolean }) =>
+    mutationFn: (data: { message: string; include_history?: boolean; session_id?: string }) =>
       aiApi.oracleChat(data),
-    onSuccess: () => {
+    onSuccess: (_res, _vars) => {
       queryClient.invalidateQueries({ queryKey: ["ai", "oracle", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["ai", "oracle", "sessions"] });
     },
   });
 }

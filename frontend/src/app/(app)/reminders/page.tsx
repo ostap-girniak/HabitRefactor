@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bell, Plus, Trash2 } from "lucide-react";
 import { useHabits, useReminders, useCreateReminder, useDeleteReminder, useUpdateReminder } from "@/lib/hooks";
 import { useUIStore } from "@/lib/store";
+import { useT } from "@/lib/i18n";
 
 type Reminder = {
   id: string;
@@ -26,6 +27,7 @@ type Reminder = {
 const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun as Supabase int? we'll store 0-6 with 0 Sunday for simplicity
 
 export default function RemindersPage() {
+  const t = useT();
   const addToast = useUIStore((s) => s.addToast);
   const { data: habitsData } = useHabits();
   const habits = (habitsData as any) || [];
@@ -114,27 +116,27 @@ export default function RemindersPage() {
         <div>
           <h1 className="text-2xl font-black text-[var(--text-primary)] flex items-center gap-2">
             <Bell className="w-5 h-5 text-[var(--accent-ember)]" />
-            Reminders
+            {t.reminders_title}
           </h1>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
-            Smart danger-zone pushes or scheduled nudges.
+            {t.reminders_subtitle}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/settings" className="btn-ghost text-sm">
-            Back
+            {t.reminders_back}
           </Link>
           <button onClick={() => setIsModalOpen(true)} className="btn-fire text-sm flex items-center gap-2">
-            <Plus className="w-4 h-4" /> New
+            <Plus className="w-4 h-4" /> {t.reminders_new}
           </button>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="card p-6 text-[var(--text-secondary)]">Loading…</div>
+        <div className="card p-6 text-[var(--text-secondary)]">{t.reminders_loading}</div>
       ) : sorted.length === 0 ? (
         <div className="card p-6 text-[var(--text-secondary)]">
-          No reminders yet. Create a smart Danger Zone reminder to enable Relapse Interceptor.
+          {t.reminders_empty}
         </div>
       ) : (
         <div className="space-y-3">
@@ -143,19 +145,18 @@ export default function RemindersPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="badge badge-fire">{r.reminder_type}</span>
-                  {r.is_smart ? <span className="badge">smart</span> : <span className="badge">scheduled</span>}
+                  {r.is_smart ? <span className="badge">{t.reminders_smart}</span> : <span className="badge">{t.reminders_scheduled}</span>}
                   {r.habits?.name ? (
-                    <span className="text-xs text-[var(--text-muted)] truncate">Habit: {r.habits.name}</span>
+                    <span className="text-xs text-[var(--text-muted)] truncate">{t.reminders_habit} {r.habits.name}</span>
                   ) : (
-                    <span className="text-xs text-[var(--text-muted)]">All habits</span>
+                    <span className="text-xs text-[var(--text-muted)]">{t.reminders_all_habits}</span>
                   )}
                 </div>
                 <div className="font-bold text-[var(--text-primary)] mt-1 truncate">{r.title}</div>
                 <div className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">{r.message}</div>
                 {r.reminder_type === "danger_zone" && r.is_smart && (
                   <div className="text-xs text-[var(--text-muted)] mt-2">
-                    Threshold: {r.danger_threshold ?? "default"} • Cooldown: {r.cooldown_minutes ?? "default"} min •
-                    Quiet: {r.quiet_hours_start ?? "—"}–{r.quiet_hours_end ?? "—"}
+                    {t.reminders_threshold} {r.danger_threshold ?? t.reminders_default} • {t.reminders_cooldown} {r.cooldown_minutes ?? t.reminders_default} {t.reminders_min} • {t.reminders_quiet} {r.quiet_hours_start ?? "—"}–{r.quiet_hours_end ?? "—"}
                   </div>
                 )}
               </div>
@@ -168,7 +169,7 @@ export default function RemindersPage() {
                       : "bg-[var(--bg-elevated)] border-[var(--border-default)] text-[var(--text-muted)]"
                   }`}
                 >
-                  {r.is_enabled ? "ENABLED" : "DISABLED"}
+                  {r.is_enabled ? t.reminders_enabled : t.reminders_disabled}
                 </button>
                 <button onClick={() => remove(r.id)} className="btn-ghost text-sm flex items-center gap-2 text-[var(--accent-danger)]">
                   <Trash2 className="w-4 h-4" /> Delete
@@ -183,15 +184,15 @@ export default function RemindersPage() {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="card w-full max-w-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-black text-[var(--text-primary)]">New reminder</div>
+              <div className="font-black text-[var(--text-primary)]">{t.reminders_modal_title}</div>
               <button onClick={() => setIsModalOpen(false)} className="btn-ghost text-sm">
-                Close
+                {t.reminders_close}
               </button>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Type</label>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_type}</label>
                 <select
                   className="input-forge"
                   value={form.reminder_type}
@@ -207,13 +208,13 @@ export default function RemindersPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Habit (optional)</label>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_habit_optional}</label>
                 <select
                   className="input-forge"
                   value={form.habit_id}
                   onChange={(e) => setForm((s) => ({ ...s, habit_id: e.target.value }))}
                 >
-                  <option value="">All habits</option>
+                  <option value="">{t.reminders_all_habits}</option>
                   {habits.map((h: any) => (
                     <option key={h.id} value={h.id}>
                       {h.name}
@@ -224,9 +225,9 @@ export default function RemindersPage() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">Smart (AI-driven)</div>
+                  <div className="text-sm font-semibold text-[var(--text-primary)]">{t.reminders_smart_label}</div>
                   <div className="text-xs text-[var(--text-muted)]">
-                    Smart sends only when risk is detected.
+                    {t.reminders_smart_desc}
                   </div>
                 </div>
                 <button
@@ -244,7 +245,7 @@ export default function RemindersPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Title</label>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_title_label}</label>
                 <input
                   className="input-forge"
                   value={form.title}
@@ -253,7 +254,7 @@ export default function RemindersPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Message</label>
+                <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_message_label}</label>
                 <textarea
                   className="input-forge min-h-[90px]"
                   value={form.message}
@@ -264,7 +265,7 @@ export default function RemindersPage() {
               {form.is_smart && form.reminder_type === "danger_zone" ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Threshold</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_threshold_label}</label>
                     <input
                       type="number"
                       className="input-forge"
@@ -275,7 +276,7 @@ export default function RemindersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Cooldown (min)</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_cooldown_label}</label>
                     <input
                       type="number"
                       className="input-forge"
@@ -285,7 +286,7 @@ export default function RemindersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Quiet start</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_quiet_start}</label>
                     <input
                       type="time"
                       className="input-forge"
@@ -294,7 +295,7 @@ export default function RemindersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Quiet end</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_quiet_end}</label>
                     <input
                       type="time"
                       className="input-forge"
@@ -306,7 +307,7 @@ export default function RemindersPage() {
               ) : !form.is_smart ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Time</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_time}</label>
                     <input
                       type="time"
                       className="input-forge"
@@ -315,7 +316,7 @@ export default function RemindersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Days (0-6)</label>
+                    <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.reminders_days}</label>
                     <input
                       className="input-forge"
                       value={form.days_of_week.join(",")}
@@ -338,14 +339,14 @@ export default function RemindersPage() {
 
             <div className="flex items-center justify-end gap-2 mt-5">
               <button onClick={() => setIsModalOpen(false)} className="btn-ghost text-sm">
-                Cancel
+                {t.cancel}
               </button>
               <button
                 onClick={submit}
                 disabled={createReminder.isPending}
                 className="btn-fire text-sm"
               >
-                {createReminder.isPending ? "Creating…" : "Create reminder"}
+                {createReminder.isPending ? t.reminders_creating : t.reminders_create}
               </button>
             </div>
           </div>

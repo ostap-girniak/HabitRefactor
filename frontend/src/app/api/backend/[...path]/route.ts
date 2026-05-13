@@ -6,12 +6,10 @@ function getBackendBaseUrl() {
 
 async function proxy(req: NextRequest, pathParts: string[]) {
   const joinedPath = pathParts.join("/");
-  // Force a trailing slash unless it's a specific file (contains a dot)
-  const hasExtension = joinedPath.includes('.');
-  const urlPath = joinedPath + (!hasExtension && !joinedPath.endsWith('/') ? '/' : '');
-
+  // Do NOT force a trailing slash — FastAPI returns 307 redirect if we do,
+  // which causes "detached ArrayBuffer" crash in the proxy body reader.
   const upstreamUrl = new URL(
-    `${getBackendBaseUrl()}/api/v1/${urlPath}${req.nextUrl.search}`
+    `${getBackendBaseUrl()}/api/v1/${joinedPath}${req.nextUrl.search}`
   );
 
   const headers = new Headers(req.headers);
@@ -19,17 +17,44 @@ async function proxy(req: NextRequest, pathParts: string[]) {
 
   const method = req.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
-  const body = hasBody ? await req.arrayBuffer() : undefined;
+  // Read body once and store in a buffer so it can be reused if needed
+  const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
+  const body = bodyBuffer && bodyBuffer.byteLength > 0 ? bodyBuffer : undefined;
 
   const upstreamRes = await fetch(upstreamUrl, {
     method,
     headers,
     body,
-    redirect: "follow",
+    // "manual" lets us handle redirects ourselves without re-reading the body
+    redirect: "manual",
   });
 
+  // If FastAPI returns a 3xx redirect, follow it manually without a body (safe)
+  if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+    const location = upstreamRes.headers.get("location");
+    if (location) {
+      const redirectUrl = location.startsWith("http")
+        ? new URL(location)
+        : new URL(`${getBackendBaseUrl()}${location}`);
+      const redirectRes = await fetch(redirectUrl, {
+        method,
+        headers,
+        body,
+        redirect: "follow",
+      });
+      const resHeaders2 = new Headers(redirectRes.headers);
+      resHeaders2.delete("content-encoding");
+      resHeaders2.delete("transfer-encoding");
+      resHeaders2.delete("connection");
+      return new NextResponse(redirectRes.body, {
+        status: redirectRes.status,
+        headers: resHeaders2,
+      });
+    }
+  }
+
   const resHeaders = new Headers(upstreamRes.headers);
-  // Avoid sending headers Next.js may not allow to set explicitly
+  // Avoid headers Next.js may not allow to set explicitly
   resHeaders.delete("content-encoding");
   resHeaders.delete("transfer-encoding");
   resHeaders.delete("connection");

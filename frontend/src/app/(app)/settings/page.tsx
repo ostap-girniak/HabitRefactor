@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useUIStore, useUserStore } from "@/lib/store";
+import { useUpdateProfile } from "@/lib/hooks";
+import { useT } from "@/lib/i18n";
 import {
   getCurrentPushSubscription,
   isPushSupported,
@@ -29,12 +31,27 @@ import { notificationsApi } from "@/lib/api";
 export default function SettingsPage() {
   const router = useRouter();
   const user = useUserStore((s) => s.user);
+  const setUser = useUserStore((s) => s.setUser);
   const addToast = useUIStore((s) => s.addToast);
+  const language = useUIStore((s) => s.language);
+  const setLanguage = useUIStore((s) => s.setLanguage);
+  const t = useT();
+  const updateProfile = useUpdateProfile();
+  const [displayName, setDisplayName] = useState(user?.display_name || "");
+
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) return;
+    try {
+      const { data } = await updateProfile.mutateAsync({ display_name: displayName.trim() });
+      setUser(data as any);
+      addToast("success", language === "uk" ? "Профіль збережено." : "Profile saved.");
+    } catch {
+      addToast("error", language === "uk" ? "Не вдалося зберегти." : "Failed to save profile.");
+    }
+  };
   const [pushSupported, setPushSupported] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isTogglingPush, setIsTogglingPush] = useState(false);
-  const [darkMode] = useState(true);
-  const [language, setLanguage] = useState("uk");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
@@ -128,37 +145,37 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-black text-[var(--text-primary)]">Settings ⚙️</h1>
-        <p className="text-[var(--text-secondary)] text-sm mt-1">
-          Configure your forge. Your data, your rules.
-        </p>
+        <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.settings_title}</h1>
+        <p className="text-[var(--text-secondary)] text-sm mt-1">{t.settings_subtitle}</p>
       </div>
 
       {/* Profile */}
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <User className="w-5 h-5 text-[var(--accent-fire)]" />
-          <h2 className="font-bold text-[var(--text-primary)]">Profile</h2>
+          <h2 className="font-bold text-[var(--text-primary)]">{t.settings_profile}</h2>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Display Name</label>
+            <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.settings_display_name}</label>
             <input
               type="text"
-              defaultValue={user?.display_name || "Warrior"}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               className="input-forge"
             />
           </div>
           <div>
-            <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">Email</label>
-            <input
-              type="email"
-              defaultValue={user?.email || ""}
-              className="input-forge opacity-60"
-              disabled
-            />
+            <label className="block text-xs text-[var(--text-muted)] uppercase mb-1">{t.settings_email}</label>
+            <input type="email" defaultValue={user?.email || ""} className="input-forge opacity-60" disabled />
           </div>
-          <button className="btn-fire text-sm">Save Changes</button>
+          <button
+            onClick={handleSaveProfile}
+            disabled={updateProfile.isPending || !displayName.trim()}
+            className="btn-fire text-sm disabled:opacity-50"
+          >
+            {updateProfile.isPending ? "..." : t.settings_save_changes}
+          </button>
         </div>
       </div>
 
@@ -166,15 +183,15 @@ export default function SettingsPage() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Bell className="w-5 h-5 text-[var(--accent-ember)]" />
-          <h2 className="font-bold text-[var(--text-primary)]">Notifications</h2>
+          <h2 className="font-bold text-[var(--text-primary)]">{t.settings_notifications}</h2>
         </div>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-[var(--text-primary)]">Push Notifications</div>
+              <div className="text-sm font-semibold text-[var(--text-primary)]">{t.settings_push}</div>
               <div className="text-xs text-[var(--text-muted)]">
-                Daily reminders and danger-zone interventions
-                {!pushSupported ? " (unsupported on this browser)" : ""}
+                {t.settings_push_desc}
+                {!pushSupported ? ` ${t.settings_push_unsupported}` : ""}
               </div>
             </div>
             <button
@@ -203,7 +220,7 @@ export default function SettingsPage() {
                 }}
                 className="btn-ghost text-sm"
               >
-                Send test push
+                {t.settings_test_push}
               </button>
               <button
                 onClick={async () => {
@@ -211,10 +228,7 @@ export default function SettingsPage() {
                     const data = await runDangerCheck();
                     const risk = data?.oracle?.forecast?.risk_score;
                     const danger = data?.oracle?.forecast?.danger_zone;
-                    addToast(
-                      "info",
-                      `Danger check: risk ${risk ?? "?"}/100${danger ? " (DANGER)" : ""}`
-                    );
+                    addToast("info", `Danger check: risk ${risk ?? "?"}/100${danger ? " (DANGER)" : ""}`);
                   } catch (err) {
                     console.error("Danger check failed:", err);
                     addToast("error", "Failed to run danger check.");
@@ -222,16 +236,13 @@ export default function SettingsPage() {
                 }}
                 className="btn-ghost text-sm"
               >
-                Run danger check
+                {t.settings_danger_check}
               </button>
               <button
                 onClick={async () => {
                   try {
                     const data = await runDangerCheck({ forceSend: true });
-                    addToast(
-                      "success",
-                      `Force push sent (${data?.sent ?? 0}).`
-                    );
+                    addToast("success", `Force push sent (${data?.sent ?? 0}).`);
                   } catch (err) {
                     console.error("Force push failed:", err);
                     addToast("error", "Failed to force danger push.");
@@ -239,7 +250,7 @@ export default function SettingsPage() {
                 }}
                 className="btn-ghost text-sm"
               >
-                Force danger push
+                {t.settings_force_push}
               </button>
               <button
                 onClick={async () => {
@@ -258,11 +269,9 @@ export default function SettingsPage() {
                 }}
                 className="btn-ghost text-sm text-[var(--accent-info)] border-[var(--accent-info)]"
               >
-                Journal alert test
+                {t.settings_journal_alert}
               </button>
-              <a href="/reminders" className="btn-ghost text-sm">
-                Configure danger zone
-              </a>
+              <a href="/reminders" className="btn-ghost text-sm">{t.settings_configure_danger}</a>
             </div>
           )}
         </div>
@@ -272,15 +281,15 @@ export default function SettingsPage() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Moon className="w-5 h-5 text-[var(--accent-info)]" />
-          <h2 className="font-bold text-[var(--text-primary)]">Appearance</h2>
+          <h2 className="font-bold text-[var(--text-primary)]">{t.settings_appearance}</h2>
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-[var(--text-primary)]">Dark Mode</div>
-            <div className="text-xs text-[var(--text-muted)]">The forge only burns in the dark</div>
+            <div className="text-sm font-semibold text-[var(--text-primary)]">{t.settings_dark_mode}</div>
+            <div className="text-xs text-[var(--text-muted)]">{t.settings_dark_mode_desc}</div>
           </div>
           <div className="bg-[var(--accent-fire-subtle)] text-[var(--accent-fire)] text-xs font-bold px-3 py-1 rounded-lg">
-            Always On
+            {t.settings_always_on}
           </div>
         </div>
       </div>
@@ -289,7 +298,7 @@ export default function SettingsPage() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Globe className="w-5 h-5 text-[var(--accent-success)]" />
-          <h2 className="font-bold text-[var(--text-primary)]">Language</h2>
+          <h2 className="font-bold text-[var(--text-primary)]">{t.settings_language}</h2>
         </div>
         <div className="flex gap-2">
           {[
@@ -298,7 +307,7 @@ export default function SettingsPage() {
           ].map((lang) => (
             <button
               key={lang.value}
-              onClick={() => setLanguage(lang.value)}
+              onClick={() => setLanguage(lang.value as "en" | "uk")}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                 language === lang.value
                   ? "bg-[var(--accent-fire)] text-white"
@@ -315,14 +324,14 @@ export default function SettingsPage() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Shield className="w-5 h-5 text-[#7C4DFF]" />
-          <h2 className="font-bold text-[var(--text-primary)]">Data & Privacy</h2>
+          <h2 className="font-bold text-[var(--text-primary)]">{t.settings_data}</h2>
         </div>
         <div className="space-y-2">
           <button onClick={handleExportData} className="btn-ghost w-full text-left flex items-center gap-3 py-3">
             <Download className="w-4 h-4" />
             <div>
-              <div className="text-sm font-semibold">Export My Data</div>
-              <div className="text-xs text-[var(--text-muted)]">Download all your data as JSON</div>
+              <div className="text-sm font-semibold">{t.settings_export}</div>
+              <div className="text-xs text-[var(--text-muted)]">{t.settings_export_desc}</div>
             </div>
           </button>
         </div>
@@ -332,19 +341,16 @@ export default function SettingsPage() {
       <div className="card border-[var(--accent-danger)] border-opacity-30">
         <div className="flex items-center gap-2 mb-4">
           <Trash2 className="w-5 h-5 text-[var(--accent-danger)]" />
-          <h2 className="font-bold text-[var(--accent-danger)]">Danger Zone</h2>
+          <h2 className="font-bold text-[var(--accent-danger)]">{t.settings_danger_zone}</h2>
         </div>
 
         {!showDeleteConfirm ? (
           <div className="space-y-2">
-            <button
-              onClick={handleLogout}
-              className="btn-ghost w-full text-left flex items-center gap-3 py-3"
-            >
+            <button onClick={handleLogout} className="btn-ghost w-full text-left flex items-center gap-3 py-3">
               <LogOut className="w-4 h-4" />
               <div>
-                <div className="text-sm font-semibold">Sign Out</div>
-                <div className="text-xs text-[var(--text-muted)]">You can always come back</div>
+                <div className="text-sm font-semibold">{t.settings_sign_out}</div>
+                <div className="text-xs text-[var(--text-muted)]">{t.settings_sign_out_desc}</div>
               </div>
             </button>
             <button
@@ -353,28 +359,23 @@ export default function SettingsPage() {
             >
               <Trash2 className="w-4 h-4" />
               <div>
-                <div className="text-sm font-semibold">Delete Account</div>
-                <div className="text-xs opacity-70">Permanently delete all your data</div>
+                <div className="text-sm font-semibold">{t.settings_delete_account}</div>
+                <div className="text-xs opacity-70">{t.settings_delete_desc}</div>
               </div>
             </button>
           </div>
         ) : (
           <div className="bg-[var(--accent-danger-subtle)] rounded-xl p-4 space-y-3">
-            <p className="text-sm text-[var(--text-primary)]">
-              Are you sure? This will permanently delete ALL your data — habits, check-ins, journal entries, and AI insights. This cannot be undone.
-            </p>
+            <p className="text-sm text-[var(--text-primary)]">{t.settings_delete_confirm}</p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={handleDeleteAccount}
                 className="bg-[var(--accent-danger)] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600 transition-colors"
               >
-                Yes, Delete Everything
+                {t.settings_delete_yes}
               </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="btn-ghost text-sm"
-              >
-                Cancel
+              <button onClick={() => setShowDeleteConfirm(false)} className="btn-ghost text-sm">
+                {t.cancel}
               </button>
             </div>
           </div>
@@ -387,7 +388,7 @@ export default function SettingsPage() {
           <Flame className="w-4 h-4 text-[var(--accent-fire)]" />
           HabitRefactor v0.1.0
         </div>
-        <div className="text-xs text-[var(--text-muted)]">Built with fire. No excuses.</div>
+        <div className="text-xs text-[var(--text-muted)]">{t.settings_footer}</div>
       </div>
     </div>
   );

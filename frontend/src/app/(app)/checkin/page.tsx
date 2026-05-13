@@ -22,18 +22,21 @@ import {
 import { getCategoryEmoji } from "@/lib/utils";
 import { useHabits, useCreateCheckin, useTodayCheckins } from "@/lib/hooks";
 import type { Habit } from "@/lib/store";
+import { useT } from "@/lib/i18n";
 
 type Step = "habit" | "result" | "details" | "context" | "notes" | "done";
 
-const TRIGGER_TAGS = [
-  { id: "stress", label: "Stressed", icon: Brain },
-  { id: "bored", label: "Bored", icon: Clock },
-  { id: "alone", label: "Alone", icon: Users },
-  { id: "social", label: "Social pressure", icon: Users },
-  { id: "alcohol", label: "Alcohol involved", icon: Wine },
-  { id: "tired", label: "Tired", icon: Moon },
-  { id: "location", label: "Trigger location", icon: MapPin },
-];
+function getTriggerTags(t: ReturnType<typeof useT>) {
+  return [
+    { id: "stress", label: t.checkin_tag_stress, icon: Brain },
+    { id: "bored", label: t.checkin_tag_bored, icon: Clock },
+    { id: "alone", label: t.checkin_tag_alone, icon: Users },
+    { id: "social", label: t.checkin_tag_social, icon: Users },
+    { id: "alcohol", label: t.checkin_tag_alcohol, icon: Wine },
+    { id: "tired", label: t.checkin_tag_tired, icon: Moon },
+    { id: "location", label: t.checkin_tag_location, icon: MapPin },
+  ];
+}
 
 export default function CheckinPage() {
   return (
@@ -50,6 +53,7 @@ function CheckinContent() {
   const { data: habitsData, isLoading: habitsLoading } = useHabits();
   const { data: todayData } = useTodayCheckins();
   const createCheckin = useCreateCheckin();
+  const t = useT();
 
   const habits = (habitsData as Habit[]) || [];
   const todayCheckins = (todayData as any)?.checkins || [];
@@ -69,6 +73,8 @@ function CheckinContent() {
   const [timeOfDay, setTimeOfDay] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+
+  const TRIGGER_TAGS = getTriggerTags(t);
 
   const steps: Step[] = ["habit", "result", ...(result !== "success" ? ["details" as Step] : []), "context", "notes", "done"];
   const currentStepIndex = steps.indexOf(step);
@@ -118,7 +124,7 @@ function CheckinContent() {
   const toggleTag = (tagId: string) => {
     setSelectedTags((prev) =>
       prev.includes(tagId)
-        ? prev.filter((t) => t !== tagId)
+        ? prev.filter((id) => id !== tagId)
         : [...prev, tagId]
     );
   };
@@ -130,7 +136,7 @@ function CheckinContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
         <div className="w-12 h-12 border-4 border-[var(--accent-fire)] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[var(--text-secondary)]">Loading your battle records...</p>
+        <p className="text-[var(--text-secondary)]">{t.checkin_loading}</p>
       </div>
     );
   }
@@ -142,13 +148,13 @@ function CheckinContent() {
           <AlertTriangle className="w-10 h-10 text-[var(--accent-warning)]" />
         </div>
         <div className="max-w-md space-y-2">
-          <h1 className="text-2xl font-black text-[var(--text-primary)]">No Battlefield Found</h1>
+          <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.checkin_no_habits_title}</h1>
           <p className="text-[var(--text-secondary)]">
-            You must declare a battle (add a habit) before you can check in.
+            {t.checkin_no_habits_desc}
           </p>
         </div>
         <Link href="/habits/new" className="btn-fire px-8 py-4">
-          Declare Battle Now
+          {t.checkin_no_habits_cta}
         </Link>
       </div>
     );
@@ -159,10 +165,10 @@ function CheckinContent() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-[var(--text-primary)]">
-          Daily Check-in ✓
+          {t.checkin_title}
         </h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1">
-          Be brutally honest with yourself. That&apos;s the only way this works.
+          {t.checkin_subtitle}
         </p>
       </div>
 
@@ -176,7 +182,7 @@ function CheckinContent() {
             />
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2 text-right">
-            Step {currentStepIndex + 1} of {steps.length - 1}
+            {t.checkin_step_of.replace("{current}", String(currentStepIndex + 1)).replace("{total}", String(steps.length - 1))}
           </div>
         </div>
       )}
@@ -185,7 +191,7 @@ function CheckinContent() {
       {step === "habit" && (
         <div className="space-y-4 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            Which battle are you checking in for?
+            {t.checkin_which_habit}
           </h2>
           <div className="space-y-3">
             {habits.map((habit) => {
@@ -210,7 +216,7 @@ function CheckinContent() {
                   </span>
                   {alreadyDone && (
                     <span className="text-xs text-[var(--accent-success)] font-semibold flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 className="w-3 h-3" /> Done today ({alreadyDone.result})
+                      <CheckCircle2 className="w-3 h-3" /> {`${t.checkin_done_today} (${alreadyDone.result})`}
                     </span>
                   )}
                 </div>
@@ -226,13 +232,13 @@ function CheckinContent() {
       {step === "result" && (
         <div className="space-y-4 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            How did today go with {selectedHabitData?.name}?
+            {`${t.checkin_how_today} ${selectedHabitData?.name}?`}
           </h2>
           <div className="grid grid-cols-1 gap-3">
             {[
-              { value: "success" as const, label: "I stayed strong 💪", desc: "Zero relapses. Clean day.", icon: CheckCircle2, color: "var(--accent-success)", bgColor: "var(--accent-success-subtle)" },
-              { value: "partial" as const, label: "I slipped but fought back", desc: "Partial relapse — you caught yourself.", icon: AlertTriangle, color: "var(--accent-warning)", bgColor: "rgba(255, 214, 0, 0.12)" },
-              { value: "relapse" as const, label: "I relapsed 😤", desc: "Full relapse. But pain is data.", icon: XCircle, color: "var(--accent-danger)", bgColor: "var(--accent-danger-subtle)" },
+              { value: "success" as const, label: t.checkin_success_label, desc: t.checkin_success_desc, icon: CheckCircle2, color: "var(--accent-success)", bgColor: "var(--accent-success-subtle)" },
+              { value: "partial" as const, label: t.checkin_partial_label, desc: t.checkin_partial_desc, icon: AlertTriangle, color: "var(--accent-warning)", bgColor: "rgba(255, 214, 0, 0.12)" },
+              { value: "relapse" as const, label: t.checkin_relapse_label, desc: t.checkin_relapse_desc, icon: XCircle, color: "var(--accent-danger)", bgColor: "var(--accent-danger-subtle)" },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -261,12 +267,12 @@ function CheckinContent() {
       {step === "details" && (
         <div className="space-y-6 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            No judgment. Just data. What happened?
+            {t.checkin_no_judgment}
           </h2>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              How many times today?
+              {t.checkin_how_many}
             </label>
             <div className="flex items-center gap-3">
               {[1, 2, 3, 4, 5].map((n) => (
@@ -287,19 +293,19 @@ function CheckinContent() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              What triggered it?
+              {t.checkin_what_triggered}
             </label>
             <textarea
               value={relapseTrigger}
               onChange={(e) => setRelapseTrigger(e.target.value)}
               className="input-forge min-h-[80px] resize-none"
-              placeholder="Be specific. Where were you? What were you feeling?"
+              placeholder={t.checkin_trigger_placeholder}
             />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              Quick tags (select all that apply)
+              {t.checkin_quick_tags}
             </label>
             <div className="flex flex-wrap gap-2">
               {TRIGGER_TAGS.map((tag) => (
@@ -329,12 +335,12 @@ function CheckinContent() {
       {step === "context" && (
         <div className="space-y-6 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            Your state today
+            {t.checkin_your_state}
           </h2>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
-              Mood {result !== "success" ? "before the slip" : "today"} (1 = terrible, 10 = great)
+              {t.checkin_mood_before.replace("{suffix}", result !== "success" ? t.checkin_mood_before_slip : t.checkin_mood_before_today)}
             </label>
             <div className="flex items-center gap-2">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -355,7 +361,7 @@ function CheckinContent() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
-              Stress level (1 = chill, 10 = maximum)
+              {t.checkin_stress_level}
             </label>
             <div className="flex items-center gap-2">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -376,15 +382,15 @@ function CheckinContent() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
-              Sleep quality last night
+              {t.checkin_sleep}
             </label>
             <div className="flex items-center gap-3">
               {[
-                { value: 1, label: "😵 Terrible" },
-                { value: 2, label: "😐 Poor" },
-                { value: 3, label: "🙂 OK" },
-                { value: 4, label: "😊 Good" },
-                { value: 5, label: "😴 Great" },
+                { value: 1, label: t.checkin_sleep_terrible },
+                { value: 2, label: t.checkin_sleep_poor },
+                { value: 3, label: t.checkin_sleep_ok },
+                { value: 4, label: t.checkin_sleep_good },
+                { value: 5, label: t.checkin_sleep_great },
               ].map((opt) => (
                 <button
                   key={opt.value}
@@ -403,20 +409,20 @@ function CheckinContent() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
-              Time of day
+              {t.checkin_time_of_day}
             </label>
             <div className="flex items-center gap-3">
-              {["morning", "afternoon", "evening", "night"].map((t) => (
+              {(["morning", "afternoon", "evening", "night"] as const).map((timeKey) => (
                 <button
-                  key={t}
-                  onClick={() => setTimeOfDay(t)}
+                  key={timeKey}
+                  onClick={() => setTimeOfDay(timeKey)}
                   className={`flex-1 py-2.5 rounded-lg text-xs font-semibold capitalize transition-all ${
-                    timeOfDay === t
+                    timeOfDay === timeKey
                       ? "bg-[var(--accent-fire)] text-white"
                       : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
                   }`}
                 >
-                  {t}
+                  {t[("checkin_" + timeKey) as keyof typeof t]}
                 </button>
               ))}
             </div>
@@ -432,12 +438,12 @@ function CheckinContent() {
       {step === "notes" && (
         <div className="space-y-6 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            How do you feel RIGHT NOW? (1-10)
+            {result === "success" ? t.checkin_mood_after_success : t.checkin_mood_after_relapse}
           </h2>
           <p className="text-sm text-[var(--text-secondary)]">
             {result === "success"
-              ? "After holding the line — what's your emotional state?"
-              : "After the slip — be honest about how it made you feel."}
+              ? t.checkin_mood_after_success
+              : t.checkin_mood_after_relapse}
           </p>
           <div className="flex items-center gap-2">
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -457,13 +463,13 @@ function CheckinContent() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              Anything else? (optional but powerful for AI analysis)
+              {t.checkin_notes_label}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="input-forge min-h-[100px] resize-none"
-              placeholder="What was going through your head today? What thoughts led to the craving? What helped you resist? Write freely..."
+              placeholder={t.checkin_notes_placeholder}
             />
           </div>
 
@@ -481,12 +487,12 @@ function CheckinContent() {
             {isSubmitting ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving your data...
+                {t.checkin_saving}
               </>
             ) : (
               <>
                 <Send className="w-5 h-5" />
-                Submit Check-in
+                {t.checkin_submit}
               </>
             )}
           </button>
@@ -516,13 +522,13 @@ function CheckinContent() {
           <div className="space-y-2">
             <h2 className="text-3xl font-black text-[var(--text-primary)]">
               {result === "success"
-                ? "Another Day Conquered. 💪"
-                : "The Truth Sets You Free. 🔥"}
+                ? t.checkin_done_success
+                : t.checkin_done_relapse}
             </h2>
             <p className="text-[var(--text-secondary)] max-w-md mx-auto text-sm">
               {result === "success"
-                ? "Every repetition is a vote for the person you are becoming."
-                : "Pain is information. You reported the breach, now we rebuild the defenses."}
+                ? t.checkin_done_success_desc
+                : t.checkin_done_relapse_desc}
             </p>
           </div>
 
@@ -533,7 +539,7 @@ function CheckinContent() {
                   ${((selectedHabitData.current_streak_days + 1) * (selectedHabitData.cost_per_unit || 0)).toFixed(2)}
                 </div>
                 <div className="text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-widest mt-1">
-                  Saved Total
+                  {t.checkin_saved_total}
                 </div>
               </div>
               <div className="card py-4 bg-[var(--bg-secondary)] border-none">
@@ -541,7 +547,7 @@ function CheckinContent() {
                   {Math.round(((selectedHabitData.current_streak_days + 1) * (selectedHabitData.time_per_unit_minutes || 0)) / 60)}h
                 </div>
                 <div className="text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-widest mt-1">
-                  Time Reclaimed
+                  {t.checkin_time_reclaimed}
                 </div>
               </div>
             </div>
@@ -549,10 +555,10 @@ function CheckinContent() {
 
           <div className="card bg-[var(--accent-fire-subtle)] border border-[rgba(255,77,0,0.2)] p-6 max-w-md mx-auto animate-slide-up" style={{ animationDelay: '0.4s' }}>
              <h3 className="text-sm font-bold text-[var(--accent-fire)] uppercase tracking-[0.2em] mb-2 flex items-center justify-center gap-2">
-                <Zap className="w-4 h-4" /> Identity Proof Point
+                <Zap className="w-4 h-4" /> {t.checkin_identity_proof}
              </h3>
              <p className="text-[var(--text-primary)] font-medium leading-relaxed italic">
-                "{result === "success" 
+                "{result === "success"
                   ? `You just proved you are no longer the person who gave in. You ARE ${selectedHabitData?.name.toLowerCase()} free.`
                   : "Acknowledging the slip is proof of your new integrity. A liar would have hidden this. A warrior owns it."
                 }"
@@ -561,10 +567,10 @@ function CheckinContent() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <button onClick={() => router.push("/dashboard")} className="btn-fire w-full sm:w-auto px-8">
-              Back to War Room
+              {t.checkin_back_to_war}
             </button>
             <button onClick={() => router.push("/journal")} className="btn-ghost w-full sm:w-auto px-8">
-              🎙️ Record Journal
+              🎙️ {t.checkin_back}
             </button>
           </div>
         </div>
@@ -577,7 +583,7 @@ function CheckinContent() {
           className="flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back
+          {t.checkin_back}
         </button>
       )}
     </div>

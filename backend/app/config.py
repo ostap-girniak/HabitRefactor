@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     enable_scheduled_reminders: bool = False
     scheduled_reminders_interval_minutes: int = 1
 
+    # Pattern Interceptor (behavioral pattern analysis & pre-emptive alerts)
+    enable_pattern_interceptor: bool = True
+    pattern_interceptor_interval_minutes: int = 15
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

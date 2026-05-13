@@ -16,6 +16,7 @@ import {
 import { formatMoney, getCategoryEmoji } from "@/lib/utils";
 import { useHabits, usePainProjection } from "@/lib/hooks";
 import type { Habit } from "@/lib/store";
+import { useT } from "@/lib/i18n";
 
 // Generate projections based on real habit data
 function generateProjections(costPerUnit: number, timePerUnitMinutes: number, caloriesPerUnit: number, unitName: string) {
@@ -101,6 +102,7 @@ function getHealthImpact(category: string, months: number): string {
 }
 
 export default function PainPage() {
+  const t = useT();
   const { data: habitsData, isLoading } = useHabits();
   const [expandedMonth, setExpandedMonth] = useState<number | null>(12);
   const [selectedHabitIndex, setSelectedHabitIndex] = useState(0);
@@ -119,7 +121,7 @@ export default function PainPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-[var(--accent-fire)] border-t-transparent rounded-full animate-spin" />
         <p className="text-[var(--text-secondary)] font-medium animate-pulse">
-          Calculating the cost of your habits...
+          {t.pain_loading}
         </p>
       </div>
     );
@@ -132,10 +134,10 @@ export default function PainPage() {
           <Swords className="w-10 h-10 text-[var(--accent-fire)]" />
         </div>
         <div className="max-w-md space-y-2">
-          <h1 className="text-3xl font-black text-[var(--text-primary)]">No Data to Project</h1>
-          <p className="text-[var(--text-secondary)]">Add a habit first so we can show you the brutal truth of what continuing costs you.</p>
+          <h1 className="text-3xl font-black text-[var(--text-primary)]">{t.pain_no_data_title}</h1>
+          <p className="text-[var(--text-secondary)]">{t.pain_no_data_desc}</p>
         </div>
-        <Link href="/habits/new" className="btn-fire px-8 py-4 text-lg">Declare Your First Battle</Link>
+        <Link href="/habits/new" className="btn-fire px-8 py-4 text-lg">{t.pain_no_data_cta}</Link>
       </div>
     );
   }
@@ -155,17 +157,17 @@ export default function PainPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-black text-[var(--text-primary)]">
-          Pain Accumulator 📊
+          {t.pain_title}
         </h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1">
-          The brutal truth about what continuing costs you. Numbers don&apos;t lie.
+          {t.pain_subtitle}
         </p>
       </div>
 
       {/* Habit selector */}
       {habits.length > 1 ? (
         <div className="card-fire p-4">
-          <div className="text-sm text-[var(--text-muted)] mb-2">Select a battle to project:</div>
+          <div className="text-sm text-[var(--text-muted)] mb-2">{t.pain_select_battle}</div>
           <div className="flex flex-wrap gap-2">
             {habits.map((habit, i) => (
               <button
@@ -187,7 +189,7 @@ export default function PainPage() {
         <div className="card-fire p-4 flex items-center gap-3">
           <span className="text-2xl">{getCategoryEmoji(selectedHabit.category)}</span>
           <div className="flex-1">
-            <div className="text-sm text-[var(--text-muted)]">Showing projections for</div>
+            <div className="text-sm text-[var(--text-muted)]">{t.pain_showing_for}</div>
             <div className="font-bold text-[var(--text-primary)]">{selectedHabit.name}</div>
           </div>
           {hasFinancialData && (
@@ -200,9 +202,9 @@ export default function PainPage() {
       <div className="bg-[var(--accent-danger-subtle)] border border-[rgba(255,23,68,0.3)] rounded-xl p-4 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-[var(--accent-danger)] flex-shrink-0 mt-0.5" />
         <div>
-          <div className="font-bold text-[var(--accent-danger)] text-sm">IF YOU DON&apos;T STOP NOW</div>
+          <div className="font-bold text-[var(--accent-danger)] text-sm">{t.pain_warning_title}</div>
           <div className="text-sm text-[var(--text-secondary)] mt-1">
-            These are the real costs of continuing <strong>{selectedHabit.name}</strong> at your current rate. Every number is calculated from YOUR data.
+            {t.pain_warning_desc} <strong>{selectedHabit.name}</strong> {t.pain_warning_desc2}
           </div>
         </div>
       </div>
@@ -211,10 +213,10 @@ export default function PainPage() {
       {!hasFinancialData && !hasTimeData && (
         <div className="card bg-[var(--bg-secondary)] border-dashed border-2 text-center py-6">
           <p className="text-[var(--text-muted)] text-sm">
-            💡 Add cost per unit and time per unit to your habit to see financial and time projections.
+            💡 {t.pain_add_cost_hint}
           </p>
           <Link href={`/habits/${selectedHabit.id}`} className="text-[var(--accent-fire)] text-sm hover:underline mt-2 inline-block">
-            Edit this habit →
+            {t.pain_edit_habit}
           </Link>
         </div>
       )}
@@ -247,7 +249,7 @@ export default function PainPage() {
 
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-[var(--text-primary)]">
-                    In {proj.months} month{proj.months > 1 ? "s" : ""}
+                    {proj.months === 1 ? t.pain_in_month.replace("{n}", "1") : t.pain_in_months.replace("{n}", String(proj.months))}
                   </div>
                   <div className="text-sm text-[var(--text-secondary)] flex items-center gap-3">
                     {hasFinancialData && (
@@ -276,7 +278,7 @@ export default function PainPage() {
                         <div className="text-lg font-black text-[var(--accent-danger)]">
                           {formatMoney(proj.money_lost)}
                         </div>
-                        <div className="text-[10px] text-[var(--text-muted)] uppercase">Money Burned</div>
+                        <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.pain_money_burned}</div>
                       </div>
                     )}
                     {hasTimeData && (
@@ -285,7 +287,7 @@ export default function PainPage() {
                         <div className="text-lg font-black text-[var(--accent-warning)]">
                           {proj.time_lost_hours}h
                         </div>
-                        <div className="text-[10px] text-[var(--text-muted)] uppercase">Time Wasted</div>
+                        <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.pain_time_wasted}</div>
                       </div>
                     )}
                     {(selectedHabit.calories_per_unit || 0) > 0 && (
@@ -294,7 +296,7 @@ export default function PainPage() {
                         <div className="text-lg font-black text-[var(--accent-ember)]">
                           {proj.calories.toLocaleString()}
                         </div>
-                        <div className="text-[10px] text-[var(--text-muted)] uppercase">Calories</div>
+                        <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.pain_calories}</div>
                       </div>
                     )}
                     <div className="bg-[var(--bg-elevated)] rounded-xl p-3">
@@ -302,7 +304,7 @@ export default function PainPage() {
                       <div className="text-lg font-black text-[var(--accent-danger)]">
                         {proj.life_years} yrs
                       </div>
-                      <div className="text-[10px] text-[var(--text-muted)] uppercase">Life Lost</div>
+                      <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.pain_life_lost}</div>
                     </div>
                   </div>
 
@@ -310,7 +312,7 @@ export default function PainPage() {
                   <div className="bg-[var(--accent-danger-subtle)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Heart className="w-4 h-4 text-[var(--accent-danger)]" />
-                      <span className="text-sm font-bold text-[var(--accent-danger)]">Health Impact</span>
+                      <span className="text-sm font-bold text-[var(--accent-danger)]">{t.pain_health_impact}</span>
                     </div>
                     <p className="text-sm text-[var(--text-secondary)]">{healthImpact}</p>
                   </div>
@@ -320,7 +322,7 @@ export default function PainPage() {
                     <div className="bg-[var(--accent-success-subtle)] rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <TrendingDown className="w-4 h-4 text-[var(--accent-success)]" />
-                        <span className="text-sm font-bold text-[var(--accent-success)]">What You Could Have Instead</span>
+                        <span className="text-sm font-bold text-[var(--accent-success)]">{t.pain_could_have}</span>
                       </div>
                       <div className="space-y-1 text-sm text-[var(--text-secondary)]">
                         {hasFinancialData && <p>💰 <strong>{formatMoney(proj.money_lost)}</strong> → {proj.money_alt}</p>}
@@ -338,13 +340,13 @@ export default function PainPage() {
       {/* Bottom CTA */}
       <div className="card-fire p-6 text-center">
         <p className="text-lg font-bold text-[var(--text-primary)] mb-2">
-          Every day you continue is a day stolen from your future.
+          {t.pain_cta_title}
         </p>
         <p className="text-sm text-[var(--text-secondary)] mb-4">
-          The numbers above are REAL. Calculated from YOUR {selectedHabit.name} data.
+          {t.pain_cta_desc} {selectedHabit.name} {t.pain_cta_desc2}
         </p>
         <Link href="/checkin" className="btn-fire text-base inline-block">
-          I&apos;m Done. Reset Starts Now. 🔥
+          {t.pain_cta_btn}
         </Link>
       </div>
     </div>

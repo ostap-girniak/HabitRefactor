@@ -536,14 +536,19 @@ class AIAnalyzer:
         """
         print(f"[AI] Oracle chat for user {user_id}: {message[:50]}...")
         profile = await self._get_profile(user_id)
-        
+
+        # Detect preferred language: use profile setting or infer from message
+        preferred_lang = profile.get("preferred_language", "en") or "en"
+        lang_label = "Ukrainian (Українська)" if preferred_lang == "uk" else "English"
+
         # 1. RAG context
         rag_context = await self.rag.build_context(
             user_id=user_id,
             query=message,
+            match_count=6,
         )
-        
-        # 2. Build rich current context (last 7 days, not just today)
+
+        # 2. Build rich current context (last 7 days)
         today = date.today()
         week_ago = (today - timedelta(days=7)).isoformat()
         today_str = today.isoformat()
@@ -554,7 +559,7 @@ class AIAnalyzer:
         # Recent checkins (7 days)
         checkins_resp = await (
             self.db.table("checkins")
-            .select("result, date, relapse_trigger, notes")
+            .select("result, date, relapse_trigger, notes, mood_before, stress_level")
             .eq("user_id", user_id)
             .gte("date", week_ago)
             .lte("date", today_str)
@@ -565,11 +570,16 @@ class AIAnalyzer:
         recent_checkins = checkins_resp.data or []
         victories = len([c for c in recent_checkins if c["result"] == "success"])
         relapses = len([c for c in recent_checkins if c["result"] == "relapse"])
+        top_triggers = {}
+        for c in recent_checkins:
+            if c.get("relapse_trigger"):
+                top_triggers[c["relapse_trigger"]] = top_triggers.get(c["relapse_trigger"], 0) + 1
+        trigger_summary = ", ".join(f"{k}({v}x)" for k, v in sorted(top_triggers.items(), key=lambda x: -x[1])[:3])
 
         # Recent journal entries (7 days)
         journals_resp = await (
             self.db.table("journal_entries")
-            .select("raw_text, transcript, created_at")
+            .select("raw_text, transcript, mood_rating, created_at")
             .eq("user_id", user_id)
             .gte("created_at", f"{week_ago}T00:00:00")
             .lte("created_at", f"{today_str}T23:59:59")
@@ -579,17 +589,32 @@ class AIAnalyzer:
         )
         recent_journals = journals_resp.data or []
         journal_snippets = "\n".join([
-            f"- [{j.get('created_at', '')[:10]}] {(j.get('transcript') or j.get('raw_text') or '')[:200]}"
+            f"- [{j.get('created_at', '')[:10]}] mood={j.get('mood_rating', '?')} | "
+            f"{(j.get('transcript') or j.get('raw_text') or '')[:200]}"
             for j in recent_journals
         ]) if recent_journals else "No journal entries this week."
 
-        # Streaks
+        # Recent AI analyses (last 3 summaries for context)
+        analyses_resp = await (
+            self.db.table("ai_analyses")
+            .select("title, summary, analysis_type, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(3)
+            .execute()
+        )
+        recent_insights = "\n".join([
+            f"- [{a.get('created_at', '')[:10]}] {a.get('analysis_type', '')}: {a.get('title', '')} — {(a.get('summary') or '')[:150]}"
+            for a in (analyses_resp.data or [])
+        ]) or "No previous AI analyses."
+
         streaks_info = self._format_streaks(habits)
 
         current_context = (
             f"Active habits: {habits_summary}\n"
-            f"Streaks: {streaks_info}\n"
+            f"Streaks:\n{streaks_info}\n"
             f"Last 7 days: {victories} victories, {relapses} relapses out of {len(recent_checkins)} check-ins.\n"
+            f"Top relapse triggers this week: {trigger_summary or 'none recorded'}\n"
             f"Recent journal entries:\n{journal_snippets}"
         )
 
@@ -597,16 +622,19 @@ class AIAnalyzer:
         prompt = ORACLE_CHAT_PROMPT.format(
             display_name=profile.get("display_name", "Warrior"),
             identity_statement=profile.get("current_identity_statement", "Becoming unstoppable"),
+            preferred_language=lang_label,
             current_context=current_context,
+            recent_insights=recent_insights,
             personal_context=rag_context["personal_context"],
             knowledge_context=rag_context["knowledge_context"],
+            knowledge_sources_list=rag_context.get("knowledge_sources_list", "No sources available."),
             history=json.dumps(history or [], indent=2),
             message=message,
         )
 
         # 4. Generate
         response = await self._generate(prompt, temperature=0.7)
-        
+
         return response
 
     # ---- Helper methods ----

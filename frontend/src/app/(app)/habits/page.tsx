@@ -5,8 +5,10 @@ import { Plus, ChevronRight, TrendingUp, AlertTriangle, Swords } from "lucide-re
 import { getCategoryEmoji, formatMoney, getStreakMessage } from "@/lib/utils";
 import { useHabits } from "@/lib/hooks";
 import type { Habit } from "@/lib/store";
+import { useT } from "@/lib/i18n";
 
 export default function HabitsPage() {
+  const t = useT();
   const { data: habitsData, isLoading } = useHabits();
 
   if (isLoading) {
@@ -14,7 +16,7 @@ export default function HabitsPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-[var(--accent-fire)] border-t-transparent rounded-full animate-spin" />
         <p className="text-[var(--text-secondary)] font-medium animate-pulse">
-          Loading your arsenal...
+          {t.habits_loading}
         </p>
       </div>
     );
@@ -29,13 +31,13 @@ export default function HabitsPage() {
           <Swords className="w-10 h-10 text-[var(--accent-fire)]" />
         </div>
         <div className="max-w-md space-y-2">
-          <h1 className="text-3xl font-black text-[var(--text-primary)]">No Active Battles</h1>
+          <h1 className="text-3xl font-black text-[var(--text-primary)]">{t.habits_empty_title}</h1>
           <p className="text-[var(--text-secondary)]">
-            You haven&apos;t added any habits to track. Start by declaring war on a habit that&apos;s holding you back.
+            {t.habits_empty_desc}
           </p>
         </div>
         <Link href="/habits/new" className="btn-fire px-8 py-4 text-lg flex items-center gap-2">
-          <Plus className="w-5 h-5" /> Start New Battle
+          <Plus className="w-5 h-5" /> {t.habits_start_battle}
         </Link>
       </div>
     );
@@ -49,15 +51,15 @@ export default function HabitsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-[var(--text-primary)]">
-            Your Battles ⚔️
+            {t.habits_title} ⚔️
           </h1>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
-            Every habit is a war. Know your enemy.
+            {t.habits_subtitle}
           </p>
         </div>
         <Link href="/habits/new" className="btn-fire flex items-center gap-2 text-sm text-center">
           <Plus className="w-4 h-4" />
-          New Battle
+          {t.habits_new_battle}
         </Link>
       </div>
 
@@ -65,19 +67,19 @@ export default function HabitsPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card text-center">
           <div className="text-2xl font-black text-[var(--accent-success)]">{habits.length}</div>
-          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">Active Battles</div>
+          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">{t.habits_active}</div>
         </div>
         <div className="card text-center">
           <div className="text-2xl font-black text-[var(--accent-fire)]">
             {totalCleanDays}
           </div>
-          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">Clean Days</div>
+          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">{t.habits_clean_days}</div>
         </div>
         <div className="card text-center">
           <div className="text-2xl font-black text-[var(--accent-danger)]">
             {totalRelapses}
           </div>
-          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">Relapses</div>
+          <div className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-tight">{t.habits_relapses}</div>
         </div>
       </div>
 
@@ -117,25 +119,25 @@ export default function HabitsPage() {
                   {/* Stats row */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                     <div className="bg-[var(--bg-elevated)] rounded-lg px-3 py-2">
-                      <div className="text-[10px] text-[var(--text-muted)] uppercase">Streak</div>
+                      <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.habits_streak}</div>
                       <div className="text-sm font-bold text-[var(--accent-success)]">
                         {habit.current_streak_days || 0}d
                       </div>
                     </div>
                     <div className="bg-[var(--bg-elevated)] rounded-lg px-3 py-2">
-                      <div className="text-[10px] text-[var(--text-muted)] uppercase">Best</div>
+                      <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.habits_best}</div>
                       <div className="text-sm font-bold text-[var(--text-primary)]">
                         {habit.best_streak_days || 0}d
                       </div>
                     </div>
                     <div className="bg-[var(--bg-elevated)] rounded-lg px-3 py-2">
-                      <div className="text-[10px] text-[var(--text-muted)] uppercase">Saved</div>
+                      <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.habits_saved}</div>
                       <div className="text-sm font-bold text-[var(--accent-success)]">
                         {formatMoney(moneySaved)}
                       </div>
                     </div>
                     <div className="bg-[var(--bg-elevated)] rounded-lg px-3 py-2">
-                      <div className="text-[10px] text-[var(--text-muted)] uppercase">Win Rate</div>
+                      <div className="text-[10px] text-[var(--text-muted)] uppercase">{t.habits_win_rate}</div>
                       <div className={`text-sm font-bold ${successRate >= 70 ? "text-[var(--accent-success)]" : successRate >= 40 ? "text-[var(--accent-warning)]" : "text-[var(--accent-danger)]"}`}>
                         {successRate}%
                       </div>
@@ -145,7 +147,7 @@ export default function HabitsPage() {
                   {/* Alternative behavior */}
                   {habit.alternative_behavior && (
                     <div className="mt-3 text-xs text-[var(--text-muted)] flex items-center gap-1.5 p-2 bg-[var(--bg-primary)] rounded-lg italic">
-                      <span className="text-[var(--accent-info)] not-italic">↪</span> Instead: {habit.alternative_behavior}
+                      <span className="text-[var(--accent-info)] not-italic">↪</span> {t.habits_instead}: {habit.alternative_behavior}
                     </div>
                   )}
                 </div>

@@ -59,20 +59,18 @@ class RAGPipeline:
         self,
         query: str,
         match_count: int = 5,
-        categories: list[str] | None = None,
-        habit_categories: list[str] | None = None,
+        match_threshold: float = 0.5,
     ) -> list[dict]:
         """Search the knowledge base using semantic similarity."""
         try:
             query_embedding = await self.generate_embedding(query)
 
             response = await self.db.rpc(
-                "match_knowledge",
+                "search_knowledge_base",
                 {
                     "query_embedding": query_embedding,
                     "match_count": match_count,
-                    "filter_categories": categories,
-                    "filter_habits": habit_categories,
+                    "match_threshold": match_threshold,
                 },
             ).execute()
 
@@ -92,7 +90,7 @@ class RAGPipeline:
             query_embedding = await self.generate_embedding(query)
 
             response = await self.db.rpc(
-                "match_user_documents",
+                "search_user_documents",
                 {
                     "p_user_id": user_id,
                     "query_embedding": query_embedding,
@@ -110,6 +108,7 @@ class RAGPipeline:
         user_id: str,
         query: str,
         habit_category: str | None = None,
+        match_count: int = 5,
     ) -> dict:
         """
         Build a complete RAG context by retrieving from both
@@ -118,8 +117,7 @@ class RAGPipeline:
         """
         knowledge_results = await self.search_knowledge_base(
             query=query,
-            match_count=5,
-            habit_categories=[habit_category] if habit_category else None,
+            match_count=match_count,
         )
 
         personal_results = await self.search_user_documents(
@@ -129,10 +127,36 @@ class RAGPipeline:
         )
 
         # Format for prompt inclusion
+        def _format_knowledge_item(r: dict) -> str:
+            meta = r.get("metadata") or {}
+            url = meta.get("url")
+            book = meta.get("book")
+            author = meta.get("author") or r.get("source_author")
+            source_type = meta.get("type", r.get("source_type", ""))
+            lines = [f"**{r.get('source_title', 'Knowledge')}** [{source_type}] — {r.get('title', '')}"]
+            if author:
+                lines.append(f"Author: {author}")
+            if book:
+                lines.append(f"From: {book}")
+            if url:
+                lines.append(f"URL: {url}")
+            lines.append(r.get("content", ""))
+            return "\n".join(lines)
+
         knowledge_context = "\n\n".join([
-            f"**{r.get('source_title', 'Knowledge')}** — {r.get('title', '')}\n{r.get('content', '')}"
-            for r in knowledge_results
+            _format_knowledge_item(r) for r in knowledge_results
         ]) if knowledge_results else "No relevant knowledge found."
+
+        # Structured list of sources for resource recommendations
+        knowledge_sources_list = "\n".join([
+            "- [{source_type}] {source_title} — {title}{url_part}".format(
+                source_type=(r.get("metadata") or {}).get("type", r.get("source_type", "unknown")),
+                source_title=r.get("source_title", ""),
+                title=r.get("title", ""),
+                url_part=f" | URL: {(r.get('metadata') or {}).get('url')}" if (r.get("metadata") or {}).get("url") else "",
+            )
+            for r in knowledge_results
+        ]) if knowledge_results else "No sources available."
 
         personal_context = "\n\n".join([
             f"[{r.get('source_type', 'entry')} — {r.get('created_at', '')}]\n{r.get('content', '')}"
@@ -141,6 +165,7 @@ class RAGPipeline:
 
         return {
             "knowledge_context": knowledge_context,
+            "knowledge_sources_list": knowledge_sources_list,
             "personal_context": personal_context,
             "knowledge_sources": knowledge_results,
             "personal_sources": personal_results,

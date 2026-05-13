@@ -18,6 +18,7 @@ import {
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useT } from "@/lib/i18n";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "War Room" },
@@ -34,6 +35,7 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -84,16 +86,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Bottom */}
         <div className="space-y-1 pt-4 border-t border-[var(--border-default)]">
           <div className="flex items-center justify-between px-3 py-1">
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Alerts</span>
+            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{t.nav_alerts}</span>
             <NotificationBell />
           </div>
           <Link href="/settings" className="sidebar-link">
             <Settings className="w-5 h-5" />
-            <span>Settings</span>
+            <span>{t.nav_settings}</span>
           </Link>
           <button onClick={handleLogout} className="sidebar-link w-full text-left hover:text-[var(--accent-danger)]">
             <LogOut className="w-5 h-5" />
-            <span>Logout</span>
+            <span>{t.nav_logout}</span>
           </button>
         </div>
       </aside>
@@ -127,7 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             }`}
           >
             <Settings className="w-5 h-5" />
-            <span className="truncate">Settings</span>
+            <span className="truncate">{t.nav_settings}</span>
           </Link>
         </div>
       </nav>

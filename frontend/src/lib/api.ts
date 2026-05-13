@@ -123,7 +123,9 @@ export const aiApi = {
     api.get(`/ai/pain-projection/${habitId}`),
   deleteInsight: (id: string) => api.delete(`/ai/insights/${id}`),
   oracleChat: (data: Record<string, unknown>) => api.post("/ai/oracle/chat", data),
-  getOracleHistory: (limit?: number) => api.get("/ai/oracle/history", { params: { limit } }),
+  getOracleHistory: (limit?: number, sessionId?: string) =>
+    api.get("/ai/oracle/history", { params: { limit, session_id: sessionId } }),
+  getOracleSessions: () => api.get("/ai/oracle/sessions"),
 };
 
 // Identity

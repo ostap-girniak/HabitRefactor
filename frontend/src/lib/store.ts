@@ -60,10 +60,12 @@ interface HabitState {
 interface UIState {
   sidebarOpen: boolean;
   activeModal: string | null;
+  language: "en" | "uk";
   toasts: { id: string; type: "success" | "error" | "info"; message: string }[];
   toggleSidebar: () => void;
   openModal: (modal: string) => void;
   closeModal: () => void;
+  setLanguage: (lang: "en" | "uk") => void;
   addToast: (type: "success" | "error" | "info", message: string) => void;
   removeToast: (id: string) => void;
 }
@@ -116,23 +118,33 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
 }));
 
 // ---- UI Store ----
-export const useUIStore = create<UIState>()((set) => ({
-  sidebarOpen: true,
-  activeModal: null,
-  toasts: [],
-  toggleSidebar: () =>
-    set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  openModal: (modal) => set({ activeModal: modal }),
-  closeModal: () => set({ activeModal: null }),
-  addToast: (type, message) =>
-    set((state) => ({
-      toasts: [
-        ...state.toasts,
-        { id: Date.now().toString(), type, message },
-      ],
-    })),
-  removeToast: (id) =>
-    set((state) => ({
-      toasts: state.toasts.filter((t) => t.id !== id),
-    })),
-}));
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      sidebarOpen: true,
+      activeModal: null,
+      language: "uk" as "en" | "uk",
+      toasts: [],
+      toggleSidebar: () =>
+        set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      openModal: (modal) => set({ activeModal: modal }),
+      closeModal: () => set({ activeModal: null }),
+      setLanguage: (lang) => set({ language: lang }),
+      addToast: (type, message) =>
+        set((state) => ({
+          toasts: [
+            ...state.toasts,
+            { id: Date.now().toString(), type, message },
+          ],
+        })),
+      removeToast: (id) =>
+        set((state) => ({
+          toasts: state.toasts.filter((t) => t.id !== id),
+        })),
+    }),
+    {
+      name: "catalyst-ui",
+      partialize: (state) => ({ language: state.language }),
+    }
+  )
+);

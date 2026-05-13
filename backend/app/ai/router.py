@@ -77,6 +77,7 @@ class ManifestoRequest(BaseModel):
 class OracleChatRequest(BaseModel):
     message: str
     include_history: bool = True
+    session_id: Optional[str] = None
 
 
 # ---- Daily / Weekly Analysis ----
@@ -94,14 +95,32 @@ async def trigger_daily_analysis(
     settings = get_settings()
     admin_client = await get_supabase_admin()
     analyzer = AIAnalyzer(settings, admin_client)
-    
-    # Run analysis (can be backgrounded but user wants to see it immediately for now)
-    result = await analyzer.analyze_daily(str(user.id), data.date or date.today())
+    target_date = data.date or date.today()
+
+    try:
+        result = await _run_with_retries(
+            lambda: analyzer.analyze_daily(str(user.id), target_date),
+            attempts=2,
+            delay_seconds=1.5,
+        )
+    except Exception as primary_err:
+        alt = await _try_openai_fallback(
+            settings,
+            admin_client,
+            lambda alt_analyzer: alt_analyzer.analyze_daily(str(user.id), target_date),
+        )
+        if alt:
+            result = alt
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=f"AI analysis is temporarily unavailable. Please try again in a moment. ({str(primary_err)[:120]})",
+            )
 
     return {
         "message": "Daily analysis complete. Your forge is glowing. 🔥",
         "status": "success",
-        "analysis": result
+        "analysis": result,
     }
 
 
@@ -115,13 +134,31 @@ async def trigger_weekly_analysis(
     settings = get_settings()
     admin_client = await get_supabase_admin()
     analyzer = AIAnalyzer(settings, admin_client)
-    
-    result = await analyzer.analyze_weekly(str(user.id))
+
+    try:
+        result = await _run_with_retries(
+            lambda: analyzer.analyze_weekly(str(user.id)),
+            attempts=2,
+            delay_seconds=1.5,
+        )
+    except Exception as primary_err:
+        alt = await _try_openai_fallback(
+            settings,
+            admin_client,
+            lambda alt_analyzer: alt_analyzer.analyze_weekly(str(user.id)),
+        )
+        if alt:
+            result = alt
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=f"AI analysis is temporarily unavailable. Please try again in a moment. ({str(primary_err)[:120]})",
+            )
 
     return {
         "message": "Weekly review complete. Strategic adjustments identified. 🏛️",
         "status": "success",
-        "analysis": result
+        "analysis": result,
     }
 
 
@@ -465,22 +502,59 @@ async def generate_pain_projection(
 
 # ---- Oracle Chat ----
 
-@router.get("/oracle/history")
-async def get_oracle_chat_history(
-    limit: int = Query(50, le=100),
+@router.get("/oracle/sessions")
+async def get_oracle_sessions(
     user=Depends(get_current_user),
     client: AsyncClient = Depends(get_authenticated_client),
 ):
-    """Get the conversation history with the Oracle."""
+    """List all Oracle chat sessions, newest first. Each session uses the first user message as its title."""
     response = await (
+        client.table("oracle_chats")
+        .select("session_id, content, created_at, role")
+        .eq("user_id", str(user.id))
+        .eq("role", "user")
+        .not_.is_("session_id", "null")
+        .order("created_at", desc=False)
+        .execute()
+    )
+    rows = response.data or []
+
+    # Keep only the first message per session
+    seen: dict = {}
+    for row in rows:
+        sid = row["session_id"]
+        if sid not in seen:
+            seen[sid] = {
+                "session_id": sid,
+                "title": row["content"][:80],
+                "created_at": row["created_at"],
+            }
+
+    sessions = sorted(seen.values(), key=lambda s: s["created_at"], reverse=True)
+    return {"sessions": sessions}
+
+
+@router.get("/oracle/history")
+async def get_oracle_chat_history(
+    limit: int = Query(50, le=100),
+    session_id: Optional[str] = Query(None),
+    user=Depends(get_current_user),
+    client: AsyncClient = Depends(get_authenticated_client),
+):
+    """Get Oracle conversation history. Pass session_id to scope to one session."""
+    query = (
         client.table("oracle_chats")
         .select("*")
         .eq("user_id", str(user.id))
+    )
+    if session_id:
+        query = query.eq("session_id", session_id)
+    response = await (
+        query
         .order("created_at", desc=True)
         .limit(limit)
         .execute()
     )
-    # Return in chronological order
     history = response.data or []
     history.reverse()
     return {"history": history}
@@ -495,58 +569,111 @@ async def chat_with_oracle(
     """
     Send a message to the Oracle and get a context-aware response.
     """
-    settings = get_settings()
-    admin_client = await get_supabase_admin()
-    analyzer = AIAnalyzer(settings, admin_client)
-    
-    # 1. Store user message
-    await client.table("oracle_chats").insert({
-        "user_id": str(user.id),
-        "role": "user",
-        "content": data.message,
-    }).execute()
+    import uuid as _uuid
 
-    # 2. Get recent history for context
-    history_resp = await (
-        client.table("oracle_chats")
-        .select("role, content")
-        .eq("user_id", str(user.id))
-        .order("created_at", desc=True)
-        .limit(10)
-        .execute()
-    )
-    history = history_resp.data or []
-    history.reverse()
+    session_id = data.session_id or str(_uuid.uuid4())
 
-    # 3. Generate Oracle response
     try:
-        result = await analyzer.chat_with_oracle(
-            user_id=str(user.id),
-            message=data.message,
-            history=history
+        print(f"[ORACLE] Starting chat for user {user.id}, session {session_id}")
+        settings = get_settings()
+        admin_client = await get_supabase_admin()
+        analyzer = AIAnalyzer(settings, admin_client)
+
+        # 1. Store user message
+        print("[ORACLE] Step 1: Storing user message...")
+        try:
+            await client.table("oracle_chats").insert({
+                "user_id": str(user.id),
+                "role": "user",
+                "content": data.message,
+                "session_id": session_id,
+            }).execute()
+        except Exception as insert_err:
+            print(f"[ORACLE] ERROR in Step 1 (insert user msg): {insert_err}")
+            raise insert_err
+
+        # 2. Get recent history for context (same session only)
+        print("[ORACLE] Step 2: Getting history...")
+        history_resp = await (
+            client.table("oracle_chats")
+            .select("role, content")
+            .eq("user_id", str(user.id))
+            .eq("session_id", session_id)
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
         )
-        
+        history = history_resp.data or []
+        history.reverse()
+
+        # 3. Generate Oracle response
+        print("[ORACLE] Step 3: Calling AI analyzer...")
+        try:
+            result = await _run_with_retries(
+                lambda: analyzer.chat_with_oracle(
+                    user_id=str(user.id),
+                    message=data.message,
+                    history=history,
+                ),
+                attempts=2,
+                delay_seconds=1.5,
+            )
+        except Exception as gemini_err:
+            alt = await _try_openai_fallback(
+                settings,
+                admin_client,
+                lambda alt_analyzer: alt_analyzer.chat_with_oracle(
+                    user_id=str(user.id),
+                    message=data.message,
+                    history=history,
+                ),
+            )
+            if alt:
+                result = alt
+            else:
+                raise gemini_err
+
         # 4. Store Oracle response
+        print("[ORACLE] Step 4: Storing Oracle response...")
+        oracle_msg = result.get("response", "The Oracle is silent...")
         await client.table("oracle_chats").insert({
             "user_id": str(user.id),
             "role": "assistant",
-            "content": result.get("response", "The Oracle is silent..."),
+            "content": oracle_msg,
+            "session_id": session_id,
             "metadata": {
                 "suggested_actions": result.get("suggested_actions"),
                 "mood_detected": result.get("mood_detected"),
-                "threat_level": result.get("threat_level")
+                "threat_level": result.get("threat_level"),
+                "resources": result.get("resources"),
+                "suggest_professional_help": result.get("suggest_professional_help"),
             }
         }).execute()
 
-        return result
-        
+        print("[ORACLE] Success.")
+        return {**result, "session_id": session_id}
+
     except Exception as e:
-        # Simple fallback if AI fails
-        error_msg = f"The Forge is currently unstable. Try again in a moment. ({str(e)[:50]})"
+        import traceback
+        print(f"!!! CRITICAL ORACLE ERROR: {str(e)}")
+        print(traceback.format_exc())
+
+        fallback_response = "The Forge is temporarily overloaded. The Oracle will return. Try again in a moment."
+        try:
+            await client.table("oracle_chats").insert({
+                "user_id": str(user.id),
+                "role": "assistant",
+                "content": fallback_response,
+                "session_id": session_id,
+                "metadata": {"error": str(e)[:200]},
+            }).execute()
+        except Exception:
+            pass
+
         return {
-            "response": error_msg,
+            "response": fallback_response,
             "suggested_actions": [],
             "mood_detected": "neutral",
-            "threat_level": 1
+            "threat_level": 1,
+            "session_id": session_id,
         }
-

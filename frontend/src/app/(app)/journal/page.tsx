@@ -19,16 +19,18 @@ import {
 } from "lucide-react";
 import { useJournalEntries, useCreateJournalEntry, useUploadJournalMedia, useHabits } from "@/lib/hooks";
 import { journalApi } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 type RecordingMode = "audio" | "video" | "text";
 
 export default function JournalPage() {
+  const t = useT();
   const [filterHabitId, setFilterHabitId] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const { data: entriesData, isLoading } = useJournalEntries({ 
+  const { data: entriesData, isLoading } = useJournalEntries({
     habit_id: filterHabitId === "all" ? undefined : filterHabitId,
-    sort: sortOrder 
+    sort: sortOrder
   });
   const { data: habits = [] } = useHabits();
   const createEntry = useCreateJournalEntry();
@@ -178,7 +180,7 @@ export default function JournalPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-[var(--accent-fire)] border-t-transparent rounded-full animate-spin" />
         <p className="text-[var(--text-secondary)] font-medium animate-pulse">
-          Loading your journal...
+          {t.journal_loading}
         </p>
       </div>
     );
@@ -187,9 +189,9 @@ export default function JournalPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-black text-[var(--text-primary)]">Journal 🎙️</h1>
+        <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.journal_title}</h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1">
-          Record your raw emotions. Video, voice, or text. The AI analyzes everything.
+          {t.journal_subtitle}
         </p>
       </div>
 
@@ -202,14 +204,14 @@ export default function JournalPage() {
             </div>
             <div className="flex-1">
               <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-muted)] block mb-1">
-                Target Habit (Optional)
+                {t.journal_target_habit}
               </label>
               <select
                 value={selectedHabitId}
                 onChange={(e) => setSelectedHabitId(e.target.value)}
                 className="w-full bg-transparent border-none text-sm font-bold text-[var(--text-primary)] focus:outline-none cursor-pointer"
               >
-                <option value="none" className="bg-[#121212]">General Entry (No Habit)</option>
+                <option value="none" className="bg-[#121212]">{t.journal_general_entry}</option>
                 {(habits as any[]).map((h: any) => (
                   <option key={h.id} value={h.id} className="bg-[#121212]">
                     {h.name}
@@ -229,8 +231,8 @@ export default function JournalPage() {
             className="card-fire text-center py-8 cursor-pointer group hover:border-[var(--accent-fire)]"
           >
             <Mic className="w-10 h-10 text-[var(--accent-fire)] mx-auto mb-3 group-hover:scale-110 transition-transform" />
-            <div className="font-bold text-[var(--text-primary)]">Voice</div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">Speak freely</div>
+            <div className="font-bold text-[var(--text-primary)]">{t.journal_voice}</div>
+            <div className="text-xs text-[var(--text-muted)] mt-1">{t.journal_voice_sub}</div>
           </button>
 
           <button
@@ -238,8 +240,8 @@ export default function JournalPage() {
             className="card text-center py-8 cursor-pointer group hover:border-[var(--accent-info)]"
           >
             <Video className="w-10 h-10 text-[var(--accent-info)] mx-auto mb-3 group-hover:scale-110 transition-transform" />
-            <div className="font-bold text-[var(--text-primary)]">Video</div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">Face the camera</div>
+            <div className="font-bold text-[var(--text-primary)]">{t.journal_video}</div>
+            <div className="text-xs text-[var(--text-muted)] mt-1">{t.journal_video_sub}</div>
           </button>
 
           <button
@@ -247,8 +249,8 @@ export default function JournalPage() {
             className="card text-center py-8 cursor-pointer group hover:border-[var(--accent-ember)]"
           >
             <FileText className="w-10 h-10 text-[var(--accent-ember)] mx-auto mb-3 group-hover:scale-110 transition-transform" />
-            <div className="font-bold text-[var(--text-primary)]">Text</div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">Write it down</div>
+            <div className="font-bold text-[var(--text-primary)]">{t.journal_text}</div>
+            <div className="text-xs text-[var(--text-muted)] mt-1">{t.journal_text_sub}</div>
           </button>
         </div>
       )}
@@ -269,7 +271,7 @@ export default function JournalPage() {
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="w-3 h-3 rounded-full bg-[var(--accent-danger)] animate-pulse" />
             <span className="text-sm font-semibold text-[var(--accent-danger)] uppercase tracking-wider">
-              Recording
+              {t.journal_recording}
             </span>
           </div>
 
@@ -285,7 +287,7 @@ export default function JournalPage() {
           </button>
 
           <p className="text-xs text-[var(--text-muted)] mt-4">
-            Speak your truth. The AI will transcribe and analyze your emotions.
+            {t.journal_speak_truth}
           </p>
         </div>
       )}
@@ -296,7 +298,7 @@ export default function JournalPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               {mode === "video" ? <Video className="w-5 h-5 text-[var(--accent-info)]" /> : <Mic className="w-5 h-5 text-[var(--accent-fire)]" />}
-              <span className="font-bold text-[var(--text-primary)]">Recording Complete</span>
+              <span className="font-bold text-[var(--text-primary)]">{t.journal_recording_complete}</span>
             </div>
             <span className="text-sm text-[var(--text-muted)]">
               <Clock className="w-4 h-4 inline mr-1" />
@@ -306,7 +308,7 @@ export default function JournalPage() {
 
           <div className="flex gap-3">
             <button onClick={submitEntry} className="btn-fire flex-1 flex items-center justify-center gap-2">
-              <Send className="w-5 h-5" /> Submit & Analyze
+              <Send className="w-5 h-5" /> {t.journal_submit_analyze}
             </button>
             <button onClick={discardRecording} className="btn-ghost text-[var(--accent-danger)]">
               <Trash2 className="w-5 h-5" />
@@ -322,7 +324,7 @@ export default function JournalPage() {
             value={textEntry}
             onChange={(e) => setTextEntry(e.target.value)}
             className="input-forge min-h-[200px] resize-none text-base"
-            placeholder="Write freely. What are you feeling right now? What happened today? What thoughts are racing through your head? Be raw. Be honest. The AI will analyze everything..."
+            placeholder={t.journal_text_placeholder}
             autoFocus
           />
           <div className="flex gap-3">
@@ -331,10 +333,10 @@ export default function JournalPage() {
               disabled={!textEntry.trim()}
               className="btn-fire flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Send className="w-5 h-5" /> Submit Entry
+              <Send className="w-5 h-5" /> {t.journal_submit_entry}
             </button>
             <button onClick={() => { setMode(null); setTextEntry(""); }} className="btn-ghost">
-              Cancel
+              {t.cancel}
             </button>
           </div>
         </div>
@@ -345,14 +347,14 @@ export default function JournalPage() {
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <div className="flex items-center gap-2 text-[var(--text-secondary)]">
             <Filter size={18} />
-            <span className="text-sm font-medium">Habit:</span>
+            <span className="text-sm font-medium">{t.journal_habit_filter}</span>
           </div>
           <select
             value={filterHabitId}
             onChange={(e) => setFilterHabitId(e.target.value)}
             className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[var(--accent-fire)] transition-colors min-w-[160px] cursor-pointer"
           >
-            <option value="all">All Habits</option>
+            <option value="all">{t.journal_all_habits}</option>
             {(habits as any[]).map((h: any) => (
               <option key={h.id} value={h.id}>
                 {h.name}
@@ -364,26 +366,26 @@ export default function JournalPage() {
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <div className="flex items-center gap-2 text-[var(--text-secondary)]">
             {sortOrder === "desc" ? <SortDesc size={18} /> : <SortAsc size={18} />}
-            <span className="text-sm font-medium">Order:</span>
+            <span className="text-sm font-medium">{t.journal_order_filter}</span>
           </div>
           <select
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
             className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[var(--accent-fire)] transition-colors cursor-pointer"
           >
-            <option value="desc">Newest First</option>
-            <option value="asc">Oldest First</option>
+            <option value="desc">{t.journal_newest_first}</option>
+            <option value="asc">{t.journal_oldest_first}</option>
           </select>
         </div>
       </div>
 
       {/* Previous Entries */}
       <div>
-        <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">Previous Entries</h2>
+        <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t.journal_previous_entries}</h2>
         <div className="space-y-3">
           {entries.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)] border-2 border-dashed border-[var(--border-default)] rounded-xl">
-              No journal entries yet. Speak your mind.
+              {t.journal_empty}
             </div>
           ) : (
             (entries as any[]).map((entry: any, i: number) => (
@@ -449,7 +451,7 @@ export default function JournalPage() {
                     console.log("Delete button clicked for entry:", entry.id);
                     e.preventDefault();
                     e.stopPropagation();
-                    if (confirm("Delete this entry?")) {
+                    if (confirm(t.journal_delete_confirm)) {
                        try {
                           console.log("Attempting API delete call...");
                           await journalApi.delete(entry.id);
