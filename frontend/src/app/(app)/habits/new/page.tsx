@@ -18,33 +18,7 @@ import {
   Target,
 } from "lucide-react";
 import { getCategoryEmoji } from "@/lib/utils";
-
-const CATEGORIES = [
-  { value: "smoking", label: "Smoking", icon: Cigarette, emoji: "🚬" },
-  { value: "alcohol", label: "Alcohol", icon: Wine, emoji: "🍺" },
-  { value: "food", label: "Overeating / Junk Food", icon: Pizza, emoji: "🍔" },
-  { value: "social_media", label: "Social Media", icon: Smartphone, emoji: "📱" },
-  { value: "porn", label: "Pornography", icon: ShieldAlert, emoji: "🔞" },
-  { value: "swearing", label: "Swearing", icon: MessageSquareWarning, emoji: "🤬" },
-  { value: "gambling", label: "Gambling", icon: Gamepad2, emoji: "🎰" },
-  { value: "drugs", label: "Drugs", icon: Pill, emoji: "💊" },
-  { value: "procrastination", label: "Procrastination", icon: Clock, emoji: "⏰" },
-  { value: "other", label: "Other", icon: Target, emoji: "🎯" },
-];
-
-const FREQUENCIES = [
-  { value: "daily", label: "Every day" },
-  { value: "weekdays", label: "Weekdays only" },
-  { value: "weekends", label: "Weekends only" },
-  { value: "weekly", label: "Once a week" },
-  { value: "custom", label: "Custom days" },
-];
-
-const MODES = [
-  { value: "cold_turkey", label: "Cold Turkey 🧊", desc: "Quit completely. No exceptions." },
-  { value: "gradual", label: "Gradual Reduction 📉", desc: "Reduce over time." },
-  { value: "controlled", label: "Controlled Limit 🎯", desc: "Set a max per day." },
-];
+import { useT } from "@/lib/i18n";
 
 type Step = "category" | "details" | "tracking" | "triggers";
 
@@ -52,8 +26,36 @@ import { useCreateHabit } from "@/lib/hooks";
 
 export default function NewHabitPage() {
   const router = useRouter();
+  const t = useT();
   const [step, setStep] = useState<Step>("category");
   const createHabit = useCreateHabit();
+
+  const CATEGORIES = [
+    { value: "smoking", label: t.cat_smoking, icon: Cigarette, emoji: "🚬" },
+    { value: "alcohol", label: t.cat_alcohol, icon: Wine, emoji: "🍺" },
+    { value: "food", label: t.cat_food, icon: Pizza, emoji: "🍔" },
+    { value: "social_media", label: t.cat_social_media, icon: Smartphone, emoji: "📱" },
+    { value: "porn", label: t.cat_porn, icon: ShieldAlert, emoji: "🔞" },
+    { value: "swearing", label: t.cat_swearing, icon: MessageSquareWarning, emoji: "🤬" },
+    { value: "gambling", label: t.cat_gambling, icon: Gamepad2, emoji: "🎰" },
+    { value: "drugs", label: t.cat_drugs, icon: Pill, emoji: "💊" },
+    { value: "procrastination", label: t.cat_procrastination, icon: Clock, emoji: "⏰" },
+    { value: "other", label: t.cat_other, icon: Target, emoji: "🎯" },
+  ];
+
+  const FREQUENCIES = [
+    { value: "daily", label: t.freq_daily },
+    { value: "weekdays", label: t.freq_weekdays },
+    { value: "weekends", label: t.freq_weekends },
+    { value: "weekly", label: t.freq_weekly },
+    { value: "custom", label: t.freq_custom },
+  ];
+
+  const MODES = [
+    { value: "cold_turkey", label: t.mode_cold_turkey, desc: t.mode_cold_turkey_desc },
+    { value: "gradual", label: t.mode_gradual, desc: t.mode_gradual_desc },
+    { value: "controlled", label: t.mode_controlled, desc: t.mode_controlled_desc },
+  ];
 
   // Form state
   const [category, setCategory] = useState("");
@@ -120,10 +122,10 @@ export default function NewHabitPage() {
         </button>
         <div>
           <h1 className="text-2xl font-black text-[var(--text-primary)]">
-            New Battle ⚔️
+            {t.habit_new_title}
           </h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Define your enemy. Know it. Defeat it.
+            {t.habit_new_subtitle}
           </p>
         </div>
       </div>
@@ -140,7 +142,7 @@ export default function NewHabitPage() {
       {step === "category" && (
         <div className="space-y-4 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            What are you fighting?
+            {t.habit_new_what_fighting}
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {CATEGORIES.map((cat) => (
@@ -179,43 +181,43 @@ export default function NewHabitPage() {
           </h2>
 
           <div>
-            <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">Name</label>
+            <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">{t.habit_new_name}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-forge"
-              placeholder="e.g., Cigarettes, Instagram at night..."
+              placeholder={t.habit_new_name_placeholder}
             />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              Why do you want to stop? (your WHY)
+              {t.habit_new_why}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="input-forge min-h-[80px] resize-none"
-              placeholder="Be honest. Write it for yourself. Why does this habit need to die?"
+              placeholder={t.habit_new_why_placeholder}
             />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              What to do instead? (alternative behavior)
+              {t.habit_new_instead}
             </label>
             <input
               type="text"
               value={alternativeBehavior}
               onChange={(e) => setAlternativeBehavior(e.target.value)}
               className="input-forge"
-              placeholder="e.g., 10 pushups, chew gum, drink water, journal..."
+              placeholder={t.habit_new_instead_placeholder}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">Approach</label>
+            <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">{t.habit_new_approach}</label>
             <div className="space-y-2">
               {MODES.map((mode) => (
                 <button
@@ -232,7 +234,7 @@ export default function NewHabitPage() {
             </div>
           </div>
 
-          <button onClick={nextStep} className="btn-fire w-full">Continue</button>
+          <button onClick={nextStep} className="btn-fire w-full">{t.continue}</button>
         </div>
       )}
 
@@ -240,15 +242,15 @@ export default function NewHabitPage() {
       {step === "tracking" && (
         <div className="space-y-5 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            📊 Let&apos;s quantify the damage
+            {t.habit_new_quantify}
           </h2>
           <p className="text-sm text-[var(--text-secondary)]">
-            These numbers will power your savings calculator and pain projections.
+            {t.habit_new_quantify_desc}
           </p>
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              Frequency
+              {t.habit_new_frequency}
             </label>
             <div className="flex flex-wrap gap-2">
               {FREQUENCIES.map((f) => (
@@ -270,7 +272,7 @@ export default function NewHabitPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                💰 Cost per {unitName} (UAH)
+                {t.habit_new_cost_per.replace("{unit}", unitName)}
               </label>
               <input
                 type="number"
@@ -283,7 +285,7 @@ export default function NewHabitPage() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                ⏱️ Time per {unitName} (min)
+                {t.habit_new_time_per.replace("{unit}", unitName)}
               </label>
               <input
                 type="number"
@@ -298,7 +300,7 @@ export default function NewHabitPage() {
 
           <div>
             <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-              🔥 Calories per {unitName} (optional)
+              {t.habit_new_cal_per.replace("{unit}", unitName)}
             </label>
             <input
               type="number"
@@ -310,7 +312,7 @@ export default function NewHabitPage() {
             />
           </div>
 
-          <button onClick={nextStep} className="btn-fire w-full">Continue</button>
+          <button onClick={nextStep} className="btn-fire w-full">{t.continue}</button>
         </div>
       )}
 
@@ -318,10 +320,10 @@ export default function NewHabitPage() {
       {step === "triggers" && (
         <div className="space-y-5 animate-slide-up">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            🎯 Known triggers
+            {t.habit_new_triggers_title}
           </h2>
           <p className="text-sm text-[var(--text-secondary)]">
-            When/where/with whom do you usually fall? The AI will learn more over time.
+            {t.habit_new_triggers_desc}
           </p>
 
           <div className="flex gap-2">
@@ -331,7 +333,7 @@ export default function NewHabitPage() {
               onChange={(e) => setNewTrigger(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addTrigger()}
               className="input-forge flex-1"
-              placeholder="e.g., After lunch, When stressed, With friends..."
+              placeholder={t.habit_new_trigger_placeholder}
             />
             <button onClick={addTrigger} className="btn-fire px-4">
               <Plus className="w-5 h-5" />
@@ -340,13 +342,13 @@ export default function NewHabitPage() {
 
           {triggers.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {triggers.map((t, i) => (
+              {triggers.map((trig, i) => (
                 <span
                   key={i}
                   className="badge badge-fire flex items-center gap-1 cursor-pointer hover:opacity-70"
                   onClick={() => setTriggers(triggers.filter((_, idx) => idx !== i))}
                 >
-                  {t} ×
+                  {trig} ×
                 </span>
               ))}
             </div>
@@ -358,11 +360,11 @@ export default function NewHabitPage() {
             className="btn-fire w-full py-4 text-base flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
-              "Creating your battle..."
+              t.habit_new_creating
             ) : (
               <>
                 <Flame className="w-5 h-5" />
-                Start The Battle 🔥
+                {t.habit_new_start}
               </>
             )}
           </button>
@@ -371,7 +373,7 @@ export default function NewHabitPage() {
             onClick={handleSubmit}
             className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] w-full text-center"
           >
-            Skip triggers — I&apos;ll add them later
+            {t.habit_new_skip_triggers}
           </button>
         </div>
       )}
@@ -379,7 +381,7 @@ export default function NewHabitPage() {
       {/* Back button */}
       {currentIndex > 0 && (
         <button onClick={prevStep} className="flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-          <ChevronLeft className="w-4 h-4" /> Back
+          <ChevronLeft className="w-4 h-4" /> {t.back}
         </button>
       )}
     </div>

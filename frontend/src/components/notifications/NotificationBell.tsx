@@ -8,6 +8,7 @@ import {
   useMarkNotificationRead,
   useMarkAllRead,
 } from "@/lib/hooks";
+import { useT } from "@/lib/i18n";
 
 type Notification = {
   id: string;
@@ -19,15 +20,15 @@ type Notification = {
   created_at: string;
 };
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string, t: ReturnType<typeof useT>): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t.notifications_just_now;
+  if (mins < 60) return t.notifications_min_ago.replace("{n}", String(mins));
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t.notifications_hour_ago.replace("{n}", String(hours));
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t.notifications_day_ago.replace("{n}", String(days));
 }
 
 function typeIcon(type: string): string {
@@ -52,6 +53,7 @@ function typeIcon(type: string): string {
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   const { data: unreadData } = useUnreadCount();
   const { data: historyData, isLoading } = useNotificationHistory(30);
@@ -88,7 +90,7 @@ export function NotificationBell() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all"
-        aria-label="Notifications"
+        aria-label={t.notifications_aria_label}
       >
         <Bell className="w-5 h-5" />
         {unread > 0 && (
@@ -104,7 +106,7 @@ export function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-bold text-[var(--text-primary)]">
-              Notifications
+              {t.notifications_title}
             </h3>
             <div className="flex items-center gap-2">
               {unread > 0 && (
@@ -113,7 +115,7 @@ export function NotificationBell() {
                   className="text-[10px] font-semibold text-[var(--accent-fire)] hover:text-[var(--accent-ember)] transition-colors flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
-                  Read all
+                  {t.notifications_read_all}
                 </button>
               )}
               <button
@@ -129,13 +131,13 @@ export function NotificationBell() {
           <div className="overflow-y-auto max-h-[calc(70vh-52px)]">
             {isLoading ? (
               <div className="p-6 text-center text-sm text-[var(--text-muted)]">
-                Loading...
+                {t.notifications_loading}
               </div>
             ) : notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <Bell className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2 opacity-40" />
                 <p className="text-sm text-[var(--text-muted)]">
-                  No notifications yet
+                  {t.notifications_empty}
                 </p>
               </div>
             ) : (
@@ -172,7 +174,7 @@ export function NotificationBell() {
                       {n.message}
                     </p>
                     <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
-                      {timeAgo(n.created_at)}
+                      {timeAgo(n.created_at, t)}
                     </span>
                   </div>
 
@@ -184,7 +186,7 @@ export function NotificationBell() {
                         e.stopPropagation();
                         markRead.mutate(n.id);
                       }}
-                      title="Mark as read"
+                      title={t.notifications_mark_read}
                     >
                       <Check className="w-3 h-3 text-[var(--text-muted)]" />
                     </div>

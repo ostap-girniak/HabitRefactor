@@ -172,7 +172,7 @@ export default function RemindersPage() {
                   {r.is_enabled ? t.reminders_enabled : t.reminders_disabled}
                 </button>
                 <button onClick={() => remove(r.id)} className="btn-ghost text-sm flex items-center gap-2 text-[var(--accent-danger)]">
-                  <Trash2 className="w-4 h-4" /> Delete
+                  <Trash2 className="w-4 h-4" /> {t.delete}
                 </button>
               </div>
             </div>
@@ -198,12 +198,12 @@ export default function RemindersPage() {
                   value={form.reminder_type}
                   onChange={(e) => setForm((s) => ({ ...s, reminder_type: e.target.value }))}
                 >
-                  <option value="danger_zone">Danger Zone</option>
-                  <option value="morning_checkin">Morning checkin</option>
-                  <option value="evening_review">Evening review</option>
-                  <option value="motivation">Motivation</option>
-                  <option value="streak_celebration">Streak celebration</option>
-                  <option value="custom">Custom</option>
+                  <option value="danger_zone">{t.reminder_type_danger_zone}</option>
+                  <option value="morning_checkin">{t.reminder_type_morning_checkin}</option>
+                  <option value="evening_review">{t.reminder_type_evening_review}</option>
+                  <option value="motivation">{t.reminder_type_motivation}</option>
+                  <option value="streak_celebration">{t.reminder_type_streak_celebration}</option>
+                  <option value="custom">{t.reminder_type_custom}</option>
                 </select>
               </div>
 

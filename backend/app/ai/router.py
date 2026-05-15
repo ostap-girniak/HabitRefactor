@@ -13,6 +13,7 @@ from supabase import AsyncClient
 from app.dependencies import get_current_user, get_authenticated_client, get_supabase_admin
 from app.config import get_settings
 from app.ai.analyzer import AIAnalyzer
+from app.ai.rag import RAGPipeline
 
 router = APIRouter()
 
@@ -677,3 +678,46 @@ async def chat_with_oracle(
             "threat_level": 1,
             "session_id": session_id,
         }
+
+
+@router.post("/embed-knowledge-base")
+async def embed_knowledge_base(
+    admin_client: AsyncClient = Depends(get_supabase_admin),
+):
+    """
+    Batch-generate embeddings for all knowledge_base rows that have no embedding yet.
+    Run this once after seeding the knowledge base with seed_knowledge_base.sql and
+    011_ukrainian_knowledge_base.sql. Safe to call multiple times (skips already-embedded rows).
+    """
+    settings = get_settings()
+    rag = RAGPipeline(settings=settings, db_client=admin_client)
+
+    rows_resp = await (
+        admin_client.table("knowledge_base")
+        .select("id, content")
+        .is_("embedding", "null")
+        .limit(500)
+        .execute()
+    )
+    rows = rows_resp.data or []
+
+    if not rows:
+        return {"embedded": 0, "message": "All rows already have embeddings."}
+
+    ok = 0
+    failed = 0
+    for row in rows:
+        try:
+            embedding = await rag.generate_embedding(row["content"])
+            await (
+                admin_client.table("knowledge_base")
+                .update({"embedding": embedding})
+                .eq("id", row["id"])
+                .execute()
+            )
+            ok += 1
+        except Exception as e:
+            print(f"[embed-kb] Failed for row {row['id']}: {e}")
+            failed += 1
+
+    return {"embedded": ok, "failed": failed, "total": len(rows)}

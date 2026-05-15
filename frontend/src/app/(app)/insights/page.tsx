@@ -109,7 +109,7 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-black text-[var(--text-primary)]">AI Insights 🧠</h1>
+        <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.insights_title}</h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1">
           {t.insights_subtitle}
         </p>

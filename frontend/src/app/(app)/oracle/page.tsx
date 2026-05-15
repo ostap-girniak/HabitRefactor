@@ -80,14 +80,14 @@ const renderWithLinks = (text: string) => {
   return parts.length > 0 ? <>{parts}</> : <>{text}</>;
 };
 
-function formatSessionDate(isoDate: string) {
+function formatSessionDate(isoDate: string, today: string, yesterday: string, lang: string) {
   const d = new Date(isoDate);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return d.toLocaleDateString("en", { weekday: "long" });
-  return d.toLocaleDateString("en", { month: "short", day: "numeric" });
+  if (diffDays === 0) return today;
+  if (diffDays === 1) return yesterday;
+  if (diffDays < 7) return d.toLocaleDateString(lang, { weekday: "long" });
+  return d.toLocaleDateString(lang, { month: "short", day: "numeric" });
 }
 
 const RESOURCE_ICONS: Record<string, React.ReactElement> = {
@@ -229,7 +229,7 @@ export default function OraclePage() {
           <div>
             <h1 className="text-2xl font-black text-[var(--text-primary)] flex items-center gap-2">
               <MessageCircle className="w-6 h-6 text-[var(--accent-fire)]" />
-              Ask the Oracle
+              {t.oracle_title}
             </h1>
             <p className="text-[var(--text-secondary)] text-sm mt-0.5">
               {isNewChat
@@ -287,7 +287,7 @@ export default function OraclePage() {
                       {s.title}
                     </p>
                     <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                      {formatSessionDate(s.created_at)}
+                      {formatSessionDate(s.created_at, t.oracle_today, t.oracle_yesterday, t.oracle_locale)}
                     </p>
                   </button>
                 ))
@@ -356,7 +356,7 @@ export default function OraclePage() {
                       <div className={`flex items-center gap-1.5 px-1 ${msg.role === "user" ? "justify-end" : ""}`}>
                         {msg.role === "user" ? (
                           <>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">You</span>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t.oracle_you}</span>
                             <User className="w-3 h-3 text-[var(--text-muted)]" />
                           </>
                         ) : (

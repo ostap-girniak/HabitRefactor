@@ -84,7 +84,7 @@ export default function DashboardPage() {
       {/* Header Overview */}
       <div>
         <h1 className="text-[var(--text-primary)] text-2xl font-black flex items-center gap-2">
-          War Room 🔥
+          {t.dashboard_title}
         </h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1">
           {activeHabit ? `${t.dashboard_subtitle_focus} ${activeHabit.name}` : t.dashboard_subtitle_global}

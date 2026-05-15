@@ -176,7 +176,7 @@ export default function IdentityPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-[var(--text-primary)]">
-            Identity Shift Lab 🛡️
+            {t.identity_title}
           </h1>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
             {t.identity_subtitle}
@@ -197,9 +197,9 @@ export default function IdentityPage() {
       {/* Big quote */}
       <div className="card-fire p-6 text-center">
         <blockquote className="text-lg md:text-xl font-bold text-[var(--text-primary)] italic leading-relaxed">
-          &ldquo;Every action you take is a vote for the type of person you wish to become.&rdquo;
+          &ldquo;{t.identity_quote}&rdquo;
         </blockquote>
-        <cite className="text-sm text-[var(--accent-fire)] mt-2 block">— James Clear, Atomic Habits</cite>
+        <cite className="text-sm text-[var(--accent-fire)] mt-2 block">— {t.identity_quote_author}</cite>
       </div>
 
       {/* New Identity Form */}

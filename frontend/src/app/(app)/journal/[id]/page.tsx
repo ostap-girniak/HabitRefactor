@@ -18,19 +18,21 @@ import {
 import { useJournalEntry } from "@/lib/hooks";
 import { journalApi } from "@/lib/api";
 import { useState, useMemo } from "react";
-import { 
-  Radar, 
-  RadarChart, 
-  PolarGrid, 
-  PolarAngleAxis, 
-  PolarRadiusAxis, 
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
   ResponsiveContainer,
   Tooltip
 } from "recharts";
+import { useT } from "@/lib/i18n";
 
 export default function JournalDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const t = useT();
   const id = params.id as string;
   const { data: entry, isLoading, refetch } = useJournalEntry(id);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -42,7 +44,7 @@ export default function JournalDetailPage() {
       setTimeout(() => {
         refetch();
         setIsTranscribing(false);
-      }, 5000); // Give it time to start
+      }, 5000);
     } catch (error) {
       console.error("Transcription trigger failed:", error);
       setIsTranscribing(false);
@@ -51,12 +53,12 @@ export default function JournalDetailPage() {
 
   const handleDelete = async () => {
     console.log("Delete button clicked in Detail view for id:", id);
-    if (!confirm("Are you sure you want to delete this entry? It cannot be undone.")) return;
+    if (!confirm(t.journal_detail_delete_confirm)) return;
     try {
       console.log("Calling journalApi.delete...");
       await journalApi.delete(id);
       console.log("Delete call successful.");
-      alert("Entry deleted successfully.");
+      alert(t.journal_detail_deleted);
       router.push("/journal");
     } catch (error: any) {
       console.error("Delete failed in Detail view:", error);
@@ -66,25 +68,24 @@ export default function JournalDetailPage() {
 
   const chartData = useMemo(() => {
     if (!entry?.detected_emotions) return [];
-    
-    // Fixed order for reliable visualization
+
     const emotions = [
-      { key: 'joy', label: 'Joy' },
-      { key: 'anger', label: 'Anger' },
-      { key: 'sadness', label: 'Sadness' },
-      { key: 'shame', label: 'Shame' },
-      { key: 'relief', label: 'Relief' }
+      { key: 'joy', label: t.emotion_joy },
+      { key: 'anger', label: t.emotion_anger },
+      { key: 'sadness', label: t.emotion_sadness },
+      { key: 'shame', label: t.emotion_shame },
+      { key: 'relief', label: t.emotion_relief }
     ];
 
     return emotions.map(e => {
       const val = entry.detected_emotions[e.key] || 0;
       return {
         emotion: e.label,
-        value: val > 1 ? val / 10 : val, // Normalize to 0-1
+        value: val > 1 ? val / 10 : val,
         fullMark: 1
       };
     });
-  }, [entry?.detected_emotions]);
+  }, [entry?.detected_emotions, t]);
 
   if (isLoading) {
     return (
@@ -97,8 +98,8 @@ export default function JournalDetailPage() {
   if (!entry) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Entry not found</h2>
-        <Link href="/journal" className="btn-ghost mt-4 inline-block">Back to Journal</Link>
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">{t.journal_detail_not_found}</h2>
+        <Link href="/journal" className="btn-ghost mt-4 inline-block">{t.journal_detail_back_link}</Link>
       </div>
     );
   }
@@ -115,29 +116,26 @@ export default function JournalDetailPage() {
     minute: "2-digit",
   });
 
-  const formatTimeS = (s: number) =>
-    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       <div className="flex items-center justify-between">
         <Link href="/journal" className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--accent-fire)] transition-colors group">
           <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          <span className="font-medium">Back to History</span>
+          <span className="font-medium">{t.journal_detail_back}</span>
         </Link>
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={handleRetranscribe}
             disabled={isTranscribing || entry.transcription_status === "processing"}
             className="btn-ghost p-2 rounded-xl text-[var(--text-secondary)] hover:bg-white/5 disabled:opacity-50"
-            title="Re-run AI Analysis"
+            title={t.journal_detail_reanalyze}
           >
             <RefreshCcw className={`w-5 h-5 ${isTranscribing ? "animate-spin" : ""}`} />
           </button>
-          <button 
+          <button
             onClick={handleDelete}
             className="btn-ghost p-2 rounded-xl text-[var(--accent-danger)] hover:bg-[var(--accent-danger-subtle)]"
-            title="Delete Entry"
+            title={t.journal_detail_delete}
           >
             <Trash2 className="w-5 h-5" />
           </button>
@@ -194,7 +192,7 @@ export default function JournalDetailPage() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <FileText className="text-[var(--accent-fire)]" />
-                Transcript
+                {t.journal_detail_transcript}
               </h3>
               <span className={`badge ${entry.transcription_status === 'completed' ? 'badge-success' : entry.transcription_status === 'pending' ? 'badge-warning' : 'badge-danger'} uppercase text-[10px]`}>
                 {entry.transcription_status}
@@ -203,7 +201,7 @@ export default function JournalDetailPage() {
             <div className="prose prose-invert max-w-none text-lg leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
               {entry.transcript || entry.raw_text || (
                 <p className="text-[var(--text-muted)] italic">
-                  Transcription is being processed by AI. Check back in a few moments...
+                  {t.journal_detail_processing}
                 </p>
               )}
             </div>
@@ -215,25 +213,24 @@ export default function JournalDetailPage() {
           <div className="card p-6 border-white/5">
             <h3 className="text-lg font-bold text-[var(--text-primary)] mb-6 flex items-center gap-2">
               <Activity className="text-[var(--accent-info)]" />
-              Emotion Insights
+              {t.journal_detail_emotions}
             </h3>
-            
+
             {entry.detected_emotions && Object.keys(entry.detected_emotions).length > 0 ? (
               <div className="space-y-6">
-                {/* Radar Chart Visual */}
                 <div className="h-[250px] w-full mt-2">
                    <ResponsiveContainer width="100%" height="100%">
                       <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
                          <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                         <PolarAngleAxis 
-                            dataKey="emotion" 
-                            tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }} 
+                         <PolarAngleAxis
+                            dataKey="emotion"
+                            tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }}
                          />
-                         <PolarRadiusAxis 
-                            angle={30} 
-                            domain={[0, 1]} 
-                            tick={false} 
-                            axisLine={false} 
+                         <PolarRadiusAxis
+                            angle={30}
+                            domain={[0, 1]}
+                            tick={false}
+                            axisLine={false}
                          />
                          <Radar
                             name="Emotions"
@@ -242,13 +239,13 @@ export default function JournalDetailPage() {
                             fill="var(--accent-fire)"
                             fillOpacity={0.5}
                          />
-                          <Tooltip 
+                          <Tooltip
                              contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
                              itemStyle={{ color: 'var(--accent-fire)' }}
                              formatter={(value) => {
                                 const n = typeof value === "number" ? value : Number(value);
                                 const safe = Number.isFinite(n) ? n : 0;
-                                return [`${Math.round(safe * 100)}%`, "Intensity"];
+                                return [`${Math.round(safe * 100)}%`, t.journal_detail_intensity_label];
                              }}
                           />
                       </RadarChart>
@@ -263,25 +260,25 @@ export default function JournalDetailPage() {
                         <span className="text-[var(--text-primary)]">{Math.round(data.value * 100)}%</span>
                       </div>
                       <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-gradient-to-r from-[var(--accent-info)] to-[var(--accent-fire)] transition-all duration-1000"
                           style={{ width: `${Math.min(data.value * 100, 100)}%` }}
                         />
                       </div>
                     </div>
                   ))}
-                  
+
                   <div className="mt-4 pt-6 border-t border-white/5">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-[var(--text-secondary)]">Intensity Score</span>
+                      <span className="text-sm font-medium text-[var(--text-secondary)]">{t.journal_detail_intensity}</span>
                       <div className="flex flex-col items-end">
                         <span className="text-2xl font-black text-[var(--accent-fire)]">
                           {entry.emotional_intensity || 5}/10
                         </span>
                         <div className="w-24 h-1 bg-white/5 rounded-full overflow-hidden mt-1">
-                           <div 
-                              className="h-full bg-[var(--accent-fire)]" 
-                              style={{ width: `${(entry.emotional_intensity || 5) * 10}%` }} 
+                           <div
+                              className="h-full bg-[var(--accent-fire)]"
+                              style={{ width: `${(entry.emotional_intensity || 5) * 10}%` }}
                            />
                         </div>
                       </div>
@@ -291,7 +288,7 @@ export default function JournalDetailPage() {
               </div>
             ) : (
               <p className="text-sm text-[var(--text-muted)] italic text-center py-4">
-                AI extraction pending. Click re-analyze if this persists.
+                {t.journal_detail_ai_pending}
               </p>
             )}
           </div>
@@ -301,7 +298,7 @@ export default function JournalDetailPage() {
             <div className="card p-6 border-white/5">
               <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                 <Tag className="text-[var(--accent-ember)]" />
-                Key Themes
+                {t.journal_detail_themes}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {entry.key_themes.map((theme: string) => (
@@ -313,14 +310,13 @@ export default function JournalDetailPage() {
             </div>
           )}
 
-          {/* Hero Context Toggle Placeholder */}
           <div className="p-6 rounded-3xl bg-gradient-to-br from-[var(--accent-fire-subtle)] to-transparent border border-[var(--accent-fire)]/20">
             <h4 className="font-bold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <Quote size={16} className="text-[var(--accent-fire)]" />
-              Warrior Tip
+              {t.journal_detail_tip_title}
             </h4>
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-              Recording your raw emotions helps the AI build a more accurate map of your triggers. Face the fire, don't hide from it.
+              {t.journal_detail_tip}
             </p>
           </div>
         </div>

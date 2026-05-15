@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import get_settings
 from app.dependencies import get_supabase_admin
 from app.notifications.push import send_web_push, save_notification_to_history
+from app.notifications import templates as nt
 from app.stats.oracle import compute_oracle
 
 _scheduler: Optional[AsyncIOScheduler] = None
@@ -87,7 +88,7 @@ def _compute_weekday_pattern(checkins: list[dict], tz: ZoneInfo) -> dict:
 def _check_streak_pattern(checkins: list[dict]) -> Optional[dict]:
     """
     Detect if user's current check-in streak is approaching their
-    historically typical break point.
+    historically typical break point. Returns a context dict (lang-free).
     """
     valid = [c for c in checkins if _parse_ts(c.get("created_at"))]
     if len(valid) < 15:
@@ -95,7 +96,6 @@ def _check_streak_pattern(checkins: list[dict]) -> Optional[dict]:
 
     sorted_checkins = sorted(valid, key=lambda c: _parse_ts(c.get("created_at")))  # type: ignore[arg-type]
 
-    # Walk forward: collect lengths of streaks that ended in relapse
     historical_breaks: list[int] = []
     run = 0
     for c in sorted_checkins:
@@ -109,19 +109,13 @@ def _check_streak_pattern(checkins: list[dict]) -> Optional[dict]:
     if len(historical_breaks) < 3:
         return None
 
-    current_streak = run  # consecutive successes after last relapse
+    current_streak = run
     avg_break = sum(historical_breaks) / len(historical_breaks)
 
-    # Warn when within ±2 check-ins of average break point
     if current_streak >= 3 and abs(current_streak - avg_break) <= 2:
         return {
             "type": "pattern_streak",
-            "title": "⚠️ Streak Danger Zone",
-            "body": (
-                f"Your {current_streak}-check-in streak is approaching "
-                f"your historical break point (~{int(avg_break)}). "
-                "You've been here before. Stay sharp."
-            ),
+            "ctx": {"current": current_streak, "avg": int(avg_break)},
             "url": "/dashboard",
             "tag": "pattern-streak-risk",
         }
@@ -158,17 +152,20 @@ async def _analyze_and_notify_patterns(
 ) -> None:
     """Run all pattern checks for one user and send relevant pre-emptive notifications."""
 
-    # Resolve user timezone
+    # Resolve user timezone + language
     tz_name = "UTC"
+    user_lang = "uk"
     try:
         prof = await (
             admin_client.table("profiles")
-            .select("timezone")
+            .select("timezone, preferred_language")
             .eq("id", user_id)
             .single()
             .execute()
         )
-        tz_name = (prof.data or {}).get("timezone") or "UTC"
+        prof_data = prof.data or {}
+        tz_name = prof_data.get("timezone") or "UTC"
+        user_lang = nt.normalize_lang(prof_data.get("preferred_language"))
     except Exception:
         pass
 
@@ -228,24 +225,22 @@ async def _analyze_and_notify_patterns(
             relapse_rate = stats["relapse"] / stats["total"]
             if relapse_rate < 0.5:
                 continue
-            # Minutes until this hour starts
             diff = h * 60 - current_minutes
             if diff < 0:
-                diff += 24 * 60  # wrap to next occurrence
+                diff += 24 * 60
             if 15 <= diff <= 35:
                 trigger = _top_trigger_at_hour(checkins, h, tz_info)
-                trigger_hint = f" Watch out for: {trigger}." if trigger else ""
                 notifications_to_send.append({
                     "type": "pattern_hourly",
-                    "title": "⚡ High-Risk Hour Approaching",
-                    "body": (
-                        f"You tend to relapse around {h}:00. "
-                        f"It's {now_local.strftime('%H:%M')} — stay locked in for the next 30 minutes.{trigger_hint}"
-                    ),
+                    "ctx": {
+                        "hour": h,
+                        "now_local": now_local.strftime("%H:%M"),
+                        "trigger": trigger,
+                    },
                     "url": "/dashboard",
                     "tag": "pattern-hourly-risk",
                 })
-                break  # Only one hourly warning per tick
+                break
 
     # 2. Day-of-week risk: send morning warning (8–10am) on historically high-risk days
     if "pattern_weekday" not in recent_types and 8 <= now_local.hour <= 10:
@@ -258,11 +253,9 @@ async def _analyze_and_notify_patterns(
             today_rate = today_stats["relapse"] / max(today_stats["total"], 1)
 
             if today_stats["total"] >= 3 and today_rate >= 0.45 and today_rate > overall_avg_rate * 1.4:
-                day_name = now_local.strftime("%A")
                 notifications_to_send.append({
                     "type": "pattern_weekday",
-                    "title": f"📅 {day_name} Risk Day",
-                    "body": f"{day_name}s have been historically challenging for you. Prepare your defense today.",
+                    "ctx": {"day_en": now_local.strftime("%A")},
                     "url": "/checkin",
                     "tag": "pattern-weekday-risk",
                 })
@@ -278,11 +271,7 @@ async def _analyze_and_notify_patterns(
         if len(recent_relapses) >= 2:
             notifications_to_send.append({
                 "type": "pattern_consecutive",
-                "title": "🛡️ Multiple Relapses Detected",
-                "body": (
-                    f"{len(recent_relapses)} relapses in the last 24 hours. "
-                    "One bad day doesn't have to become two. Open your War Room."
-                ),
+                "ctx": {"count": len(recent_relapses)},
                 "url": "/dashboard",
                 "tag": "pattern-consecutive",
             })
@@ -293,15 +282,35 @@ async def _analyze_and_notify_patterns(
         if streak_warning:
             notifications_to_send.append(streak_warning)
 
-    # Send all triggered notifications
+    # Render with user's language, then send
     for notif in notifications_to_send:
+        ctx = notif.get("ctx") or {}
+        ntype = notif["type"]
+        if ntype == "pattern_hourly":
+            title, body = nt.pick_pattern_hourly(
+                user_lang,
+                hour=ctx["hour"],
+                now_local=ctx["now_local"],
+                trigger=ctx.get("trigger"),
+            )
+        elif ntype == "pattern_weekday":
+            title, body = nt.pick_pattern_weekday(user_lang, day_en=ctx["day_en"])
+        elif ntype == "pattern_consecutive":
+            title, body = nt.pick_pattern_consecutive(user_lang, count=ctx["count"])
+        elif ntype == "pattern_streak":
+            title, body = nt.pick_pattern_streak(
+                user_lang, current=ctx["current"], avg=ctx["avg"]
+            )
+        else:
+            continue
+
         sent_any = False
         for sub in subs:
             err = await send_web_push(
                 settings=settings,
                 subscription=sub,
-                title=notif["title"],
-                body=notif["body"],
+                title=title,
+                body=body,
                 url=notif["url"],
                 tag=notif["tag"],
             )
@@ -322,12 +331,12 @@ async def _analyze_and_notify_patterns(
             await save_notification_to_history(
                 client=admin_client,
                 user_id=user_id,
-                title=notif["title"],
-                body=notif["body"],
-                notification_type=notif["type"],
+                title=title,
+                body=body,
+                notification_type=ntype,
                 url=notif["url"],
             )
-            print(f"[PUSH] Pattern notification sent user={user_id} type={notif['type']}")
+            print(f"[PUSH] Pattern notification sent user={user_id} type={ntype}")
 
 
 async def _run_pattern_interceptor_tick() -> None:
@@ -423,15 +432,18 @@ async def _run_relapse_interceptor_tick() -> None:
         habit_id = str(r["habit_id"]) if r.get("habit_id") else None
 
         tz_name = "UTC"
+        user_lang = "uk"
         try:
             prof = (
                 await admin_client.table("profiles")
-                .select("timezone")
+                .select("timezone, preferred_language")
                 .eq("id", user_id)
                 .single()
                 .execute()
             )
-            tz_name = (prof.data or {}).get("timezone") or "UTC"
+            prof_data = prof.data or {}
+            tz_name = prof_data.get("timezone") or "UTC"
+            user_lang = nt.normalize_lang(prof_data.get("preferred_language"))
         except Exception:
             tz_name = "UTC"
 
@@ -477,14 +489,17 @@ async def _run_relapse_interceptor_tick() -> None:
         warning_report = forecast.get("warning_report") or ""
         high_risk_hour = (oracle.get("summary") or {}).get("high_risk_hour")
 
-        title = (r.get("title") or "").strip() or "🔥 Danger Zone"
-        base_body = (r.get("message") or "").strip() or "High relapse risk detected. Open your War Room now."
+        default_title, default_body = nt.pick_danger_default(user_lang)
+        title = (r.get("title") or "").strip() or default_title
+        base_body = (r.get("message") or "").strip() or default_body
 
         extra_bits = []
         if isinstance(risk_score, (int, float)):
-            extra_bits.append(f"Risk {risk_score}/100.")
+            risk_label = "Ризик" if user_lang == "uk" else "Risk"
+            extra_bits.append(f"{risk_label} {risk_score}/100.")
         if isinstance(high_risk_hour, int):
-            extra_bits.append(f"High-risk hour: {high_risk_hour}:00.")
+            hour_label = "Небезпечна година" if user_lang == "uk" else "High-risk hour"
+            extra_bits.append(f"{hour_label}: {high_risk_hour}:00.")
         if warning_report:
             extra_bits.append(warning_report)
 
@@ -599,15 +614,18 @@ async def _run_scheduled_reminders_tick() -> None:
         user_id = str(r["user_id"])
 
         tz_name = "UTC"
+        user_lang = "uk"
         try:
             prof = (
                 await admin_client.table("profiles")
-                .select("timezone")
+                .select("timezone, preferred_language")
                 .eq("id", user_id)
                 .single()
                 .execute()
             )
-            tz_name = (prof.data or {}).get("timezone") or "UTC"
+            prof_data = prof.data or {}
+            tz_name = prof_data.get("timezone") or "UTC"
+            user_lang = nt.normalize_lang(prof_data.get("preferred_language"))
         except Exception:
             tz_name = "UTC"
 
@@ -667,9 +685,10 @@ async def _run_scheduled_reminders_tick() -> None:
         if not subs:
             continue
 
-        title = (r.get("title") or "").strip() or "⏰ Reminder"
-        body = (r.get("message") or "").strip() or "Time to check in, warrior."
         reminder_type = r.get("reminder_type", "custom")
+        default_title, default_body = nt.scheduled_reminder_defaults(user_lang, reminder_type)
+        title = (r.get("title") or "").strip() or default_title
+        body = (r.get("message") or "").strip() or default_body
 
         url_map = {
             "morning_checkin": "/checkin",
@@ -758,9 +777,9 @@ async def _run_journal_alert_tick() -> None:
             if not is_danger:
                 continue
 
-            title = "⚠️ Journal Danger Detected"
+            user_lang = await nt.get_user_lang(admin_client, entry["user_id"])
             snippet = text[:80].strip() + ("..." if len(text) > 80 else "")
-            body = f"Your latest journal entry indicates a struggle: \"{snippet}\". Stay strong, Warrior!"
+            title, body = nt.pick_journal_danger(user_lang, snippet=snippet)
             notification_type = "danger_zone"
             url = "/dashboard"
 
@@ -811,6 +830,137 @@ async def _run_journal_alert_tick() -> None:
         print(f"[WARN] Failed to run journal alert tick: {e}")
         import traceback
         traceback.print_exc()
+
+
+# ---- Milestone Celebrations ----
+
+async def _run_milestone_tick() -> None:
+    """
+    Run every 6 hours. For each active habit with a streak that lands on a
+    milestone day (1, 3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 250, 300, 365,
+    500, 1000), send a celebration push — but only once per (habit, streak)
+    pair (deduplicated via notification_history metadata).
+    """
+    settings = get_settings()
+    if not bool(settings.vapid_private_key and settings.vapid_public_key):
+        return
+
+    try:
+        admin_client = await get_supabase_admin()
+    except Exception as e:
+        print(f"[WARN] Milestone worker: admin client error: {e}")
+        return
+
+    try:
+        habits_resp = await (
+            admin_client.table("habits")
+            .select("id, user_id, name, current_streak_days, is_active")
+            .eq("is_active", True)
+            .in_("current_streak_days", list(nt.MILESTONE_DAYS))
+            .limit(2000)
+            .execute()
+        )
+        habits = habits_resp.data or []
+    except Exception as e:
+        print(f"[WARN] Milestone worker: habits fetch failed: {e}")
+        return
+
+    if not habits:
+        return
+
+    # Group habits by user
+    by_user: dict[str, list[dict]] = {}
+    for h in habits:
+        uid = h.get("user_id")
+        if uid:
+            by_user.setdefault(uid, []).append(h)
+
+    for user_id, user_habits in by_user.items():
+        # Already-celebrated (habit_id, streak) pairs in the last 60 days
+        already: set[tuple[str, int]] = set()
+        try:
+            hist_resp = await (
+                admin_client.table("notification_history")
+                .select("metadata, created_at")
+                .eq("user_id", user_id)
+                .eq("notification_type", "milestone")
+                .gte("created_at", (_utcnow() - timedelta(days=60)).isoformat())
+                .limit(200)
+                .execute()
+            )
+            for row in (hist_resp.data or []):
+                meta = row.get("metadata") or {}
+                hid = meta.get("habit_id")
+                days = meta.get("streak_days")
+                if hid and isinstance(days, int):
+                    already.add((str(hid), int(days)))
+        except Exception:
+            already = set()
+
+        # Get user lang + subs once
+        user_lang = await nt.get_user_lang(admin_client, user_id)
+        subs: list[dict] = []
+        try:
+            subs_resp = await (
+                admin_client.table("push_subscriptions")
+                .select("endpoint, p256dh_key, auth_key, keys, is_active")
+                .eq("user_id", user_id)
+                .eq("is_active", True)
+                .limit(20)
+                .execute()
+            )
+            subs = subs_resp.data or []
+        except Exception:
+            subs = []
+        if not subs:
+            continue
+
+        for h in user_habits:
+            hid = str(h["id"])
+            days = int(h.get("current_streak_days") or 0)
+            if days not in nt.MILESTONE_DAYS:
+                continue
+            if (hid, days) in already:
+                continue
+
+            habit_name = h.get("name") or ""
+            title, body = nt.pick_milestone(user_lang, days=days, habit_name=habit_name)
+            url = f"/habits/{hid}"
+
+            sent_any = False
+            for sub in subs:
+                err = await send_web_push(
+                    settings=settings,
+                    subscription=sub,
+                    title=title,
+                    body=body,
+                    url=url,
+                    tag=f"milestone-{hid}-{days}",
+                )
+                if err is None:
+                    sent_any = True
+                elif err == "subscription_gone":
+                    try:
+                        await (
+                            admin_client.table("push_subscriptions")
+                            .update({"is_active": False})
+                            .eq("endpoint", sub.get("endpoint"))
+                            .execute()
+                        )
+                    except Exception:
+                        pass
+
+            if sent_any:
+                await save_notification_to_history(
+                    client=admin_client,
+                    user_id=user_id,
+                    title=title,
+                    body=body,
+                    notification_type="milestone",
+                    url=url,
+                    metadata={"habit_id": hid, "streak_days": days},
+                )
+                print(f"[PUSH] Milestone {days}d sent user={user_id} habit={hid}")
 
 
 # ---- Scheduler Lifecycle ----
@@ -887,7 +1037,7 @@ async def start_workers() -> None:
             replace_existing=True,
         )
 
-    # Journal alert runs whenever push is configured
+    # Journal alert + milestone celebrations run whenever push is configured
     if has_vapid:
         async def _kickoff_journal_alert():
             await _run_journal_alert_tick()
@@ -897,6 +1047,19 @@ async def start_workers() -> None:
             trigger="interval",
             minutes=5,
             id="journal-alert-check",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+
+        async def _kickoff_milestone():
+            await _run_milestone_tick()
+
+        scheduler.add_job(
+            _kickoff_milestone,
+            trigger="interval",
+            hours=6,
+            id="milestone-celebrations",
             max_instances=1,
             coalesce=True,
             replace_existing=True,
@@ -913,6 +1076,7 @@ async def start_workers() -> None:
         asyncio.create_task(_run_pattern_interceptor_tick())
     if has_vapid:
         asyncio.create_task(_run_journal_alert_tick())
+        asyncio.create_task(_run_milestone_tick())
 
 
 async def stop_workers() -> None:

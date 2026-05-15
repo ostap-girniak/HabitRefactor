@@ -23,30 +23,7 @@ import {
   useGenerateCatalystLetter,
   useHabits,
 } from "@/lib/hooks";
-
-const TOOLS = [
-  {
-    id: "letter",
-    icon: Scroll,
-    title: "Refactor Letter",
-    description: "A letter from your future self - the version who has already won.",
-    color: "var(--accent-fire)",
-  },
-  {
-    id: "manifesto",
-    icon: Mic,
-    title: "Voice Manifesto",
-    description: "Record your own promise and play it when the old pattern starts talking.",
-    color: "var(--accent-ember)",
-  },
-  {
-    id: "hero",
-    icon: Swords,
-    title: "Hero Mode",
-    description: "Your struggle becomes an epic story. Weekly chapters of your transformation.",
-    color: "#7C4DFF",
-  },
-];
+import { useT } from "@/lib/i18n";
 
 interface HeroChapter {
   id: string;
@@ -140,6 +117,39 @@ async function deleteManifestoAudioBlob(id: string) {
 }
 
 export default function ForgePage() {
+  const t = useT();
+
+  const TOOLS = [
+    {
+      id: "letter",
+      icon: Scroll,
+      title: t.forge_tool_letter_title,
+      description: t.forge_tool_letter_desc,
+      color: "var(--accent-fire)",
+    },
+    {
+      id: "manifesto",
+      icon: Mic,
+      title: t.forge_tool_manifesto_title,
+      description: t.forge_tool_manifesto_desc,
+      color: "var(--accent-ember)",
+    },
+    {
+      id: "hero",
+      icon: Swords,
+      title: t.forge_tool_hero_title,
+      description: t.forge_tool_hero_desc,
+      color: "#7C4DFF",
+    },
+  ];
+
+  const LETTER_TONES = [
+    { value: "tough_love", label: t.forge_tone_tough, desc: t.forge_tone_tough_desc },
+    { value: "compassionate", label: t.forge_tone_compassionate, desc: t.forge_tone_compassionate_desc },
+    { value: "stoic", label: t.forge_tone_stoic, desc: t.forge_tone_stoic_desc },
+    { value: "warrior", label: t.forge_tone_warrior, desc: t.forge_tone_warrior_desc },
+  ];
+
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [letterTone, setLetterTone] = useState("tough_love");
   const [selectedHabitId, setSelectedHabitId] = useState<string>("");
@@ -588,7 +598,7 @@ export default function ForgePage() {
       <div>
         <h1 className="text-2xl font-black text-[var(--text-primary)]">HabitRefactor</h1>
         <p className="text-[var(--text-secondary)] text-sm mt-1 italic">
-          you vs you. No excuses. No mediators.
+          {t.forge_subtitle}
         </p>
       </div>
 
@@ -606,14 +616,14 @@ export default function ForgePage() {
 
       <div className="card space-y-2">
         <label className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
-          Focus Habit
+          {t.forge_focus_habit}
         </label>
         <select
           value={currentHabitId}
           onChange={(e) => setSelectedHabitId(e.target.value)}
           className="input-forge"
         >
-          {habits.length === 0 && <option value="">No habits yet</option>}
+          {habits.length === 0 && <option value="">{t.forge_no_habits}</option>}
           {habits.map((habit) => (
             <option key={habit.id} value={habit.id}>
               {habit.name}
@@ -665,31 +675,26 @@ export default function ForgePage() {
             }}
             className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           >
-            ← Back to tools
+            {t.forge_back_to_tools}
           </button>
 
           <div className="card-fire p-6">
             <div className="flex items-center gap-3 mb-4">
               <Scroll className="w-8 h-8 text-[var(--accent-fire)]" />
               <div>
-                <h2 className="text-xl font-black text-[var(--text-primary)]">Refactor Letter</h2>
+                <h2 className="text-xl font-black text-[var(--text-primary)]">{t.forge_letter_title}</h2>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  Your future self writes to you now.
+                  {t.forge_letter_subtitle}
                 </p>
               </div>
             </div>
 
             <div className="mb-4">
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Choose the voice
+                {t.forge_letter_voice_label}
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: "tough_love", label: "Tough Love", desc: "Hard pressure, zero softness" },
-                  { value: "compassionate", label: "Compassionate", desc: "Steady and humane" },
-                  { value: "stoic", label: "Stoic", desc: "Cold, clear, disciplined" },
-                  { value: "warrior", label: "Warrior", desc: "Battle mode" },
-                ].map((tone) => (
+                {LETTER_TONES.map((tone) => (
                   <button
                     key={tone.value}
                     onClick={() => setLetterTone(tone.value)}
@@ -715,12 +720,12 @@ export default function ForgePage() {
                 {generatingLetter ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Your future self is writing...
+                    {t.forge_letter_generating}
                   </>
                 ) : (
                   <>
                     <Zap className="w-5 h-5" />
-                    Generate My Letter
+                    {t.forge_letter_generate}
                   </>
                 )}
               </button>
@@ -737,10 +742,10 @@ export default function ForgePage() {
                     className="btn-fire flex-1 flex items-center justify-center gap-2"
                   >
                     {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                    {copied ? "Copied" : "Copy Letter"}
+                    {copied ? t.forge_copied : t.forge_copy_letter}
                   </button>
                   <button onClick={handleGenerateLetter} className="btn-ghost">
-                    Regenerate
+                    {t.forge_regenerate}
                   </button>
                 </div>
               </div>
@@ -755,14 +760,14 @@ export default function ForgePage() {
             onClick={() => setSelectedTool(null)}
             className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           >
-            ← Back to tools
+            {t.forge_back_to_tools}
           </button>
 
           <div className="card-fire p-6 text-center">
             <Crown className="w-12 h-12 text-[#7C4DFF] mx-auto mb-3" />
-            <h2 className="text-xl font-black text-[var(--text-primary)] mb-2">Hero Mode</h2>
+            <h2 className="text-xl font-black text-[var(--text-primary)] mb-2">{t.forge_hero_title}</h2>
             <p className="text-[var(--text-secondary)] mb-4">
-              Your struggle becomes an epic story. Every week, a new chapter is written about your transformation.
+              {t.forge_hero_desc}
             </p>
             <button
               onClick={handleGenerateChapter}
@@ -772,12 +777,12 @@ export default function ForgePage() {
               {generatingChapter ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Writing your chapter...
+                  {t.forge_hero_generating}
                 </>
               ) : (
                 <>
                   <BookOpen className="w-5 h-5" />
-                  Generate This Week&apos;s Chapter
+                  {t.forge_hero_generate}
                 </>
               )}
             </button>
@@ -790,7 +795,7 @@ export default function ForgePage() {
                   <BookOpen className="w-5 h-5 text-[#7C4DFF]" />
                 </div>
                 <div>
-                  <div className="text-xs text-[var(--text-muted)]">Chapter {chapter.chapter_number}</div>
+                  <div className="text-xs text-[var(--text-muted)]">{t.forge_hero_chapter} {chapter.chapter_number}</div>
                   <h3 className="font-bold text-[var(--text-primary)]">{chapter.title}</h3>
                 </div>
               </div>
@@ -801,7 +806,7 @@ export default function ForgePage() {
           {chapterList.length === 0 && (
             <div className="card bg-[var(--bg-secondary)] border-dashed border-2">
               <p className="text-sm text-[var(--text-muted)] text-center">
-                No chapters yet. Generate the first one to start the story.
+                {t.forge_hero_empty}
               </p>
             </div>
           )}
@@ -817,7 +822,7 @@ export default function ForgePage() {
             }}
             className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           >
-            ← Back to tools
+            {t.forge_back_to_tools}
           </button>
 
           <div className="flex items-center gap-3">
@@ -825,13 +830,13 @@ export default function ForgePage() {
               onClick={() => setManifestoView("record")}
               className={`btn-ghost ${manifestoView === "record" ? "border-[var(--accent-fire)] text-[var(--accent-fire)]" : ""}`}
             >
-              Record
+              {t.forge_manifesto_record_tab}
             </button>
             <button
               onClick={() => setManifestoView("history")}
               className={`btn-ghost ${manifestoView === "history" ? "border-[var(--accent-fire)] text-[var(--accent-fire)]" : ""}`}
             >
-              History
+              {t.forge_manifesto_history_tab}
             </button>
           </div>
 
@@ -841,47 +846,47 @@ export default function ForgePage() {
             <div className="card-fire p-6 space-y-5">
               <div className="text-center">
                 <Mic className="w-12 h-12 text-[var(--accent-ember)] mx-auto mb-3" />
-                <h2 className="text-xl font-black text-[var(--text-primary)] mb-2">Voice Manifesto</h2>
+                <h2 className="text-xl font-black text-[var(--text-primary)] mb-2">{t.forge_manifesto_section_title}</h2>
                 <p className="text-[var(--text-secondary)]">
-                  Record your own promise. This is not AI motivation. This is your voice shutting down your weak self.
+                  {t.forge_manifesto_subtitle}
                 </p>
               </div>
 
               <div className="space-y-4 text-left">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-2">
-                    Manifesto Title
+                    {t.forge_manifesto_title_label}
                   </label>
                   <input
                     value={voiceTitle}
                     onChange={(e) => setVoiceTitle(e.target.value)}
                     className="input-forge"
-                    placeholder="No deals with the old me"
+                    placeholder={t.forge_manifesto_title_placeholder}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-2">
-                    What exactly are you promising?
+                    {t.forge_manifesto_promise_label}
                   </label>
                   <textarea
                     value={voicePromise}
                     onChange={(e) => setVoicePromise(e.target.value)}
                     rows={4}
                     className="input-forge min-h-[120px]"
-                    placeholder="I do not relapse in secret. I leave the room, drink water, and survive the urge clean."
+                    placeholder={t.forge_manifesto_promise_placeholder}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-2">
-                    Trigger Prompt
+                    {t.forge_manifesto_trigger_label}
                   </label>
                   <input
                     value={triggerPrompt}
                     onChange={(e) => setTriggerPrompt(e.target.value)}
                     className="input-forge"
-                    placeholder="Play this when I am alone at night and want to negotiate."
+                    placeholder={t.forge_manifesto_trigger_placeholder}
                   />
                 </div>
 
@@ -889,14 +894,14 @@ export default function ForgePage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)]">
-                        Recording State
+                        {t.forge_manifesto_state}
                       </div>
                       <div className="text-lg font-black text-[var(--text-primary)]">
                         {isRecording
-                          ? `Recording ${formatDuration(recordingSeconds)}`
+                          ? t.forge_manifesto_recording.replace("{time}", formatDuration(recordingSeconds))
                           : isProcessingRecording
-                            ? "Saving..."
-                            : "Ready"}
+                            ? t.forge_manifesto_saving
+                            : t.forge_manifesto_ready}
                       </div>
                     </div>
                     <div
@@ -915,7 +920,7 @@ export default function ForgePage() {
                       className="btn-fire flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <Mic className="w-5 h-5" />
-                      {savedManifestos.length === 0 ? "Record My Promise" : "Record New Version"}
+                      {savedManifestos.length === 0 ? t.forge_manifesto_record_btn : t.forge_manifesto_record_new}
                     </button>
                   ) : (
                     <button
@@ -923,7 +928,7 @@ export default function ForgePage() {
                       className="btn-fire bg-[var(--accent-danger)] border-[var(--accent-danger)] flex items-center justify-center gap-2"
                     >
                       <Square className="w-5 h-5" />
-                      Stop Recording
+                      {t.forge_manifesto_stop}
                     </button>
                   )}
 
@@ -933,7 +938,7 @@ export default function ForgePage() {
                     className="btn-ghost flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <Siren className="w-5 h-5" />
-                    Emergency Play
+                    {t.forge_emergency_play}
                   </button>
                 </div>
               </div>
@@ -947,10 +952,10 @@ export default function ForgePage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)]">
-                      Emergency Ritual
+                      {t.forge_emergency_title}
                     </div>
                     <h3 className="text-lg font-black text-[var(--text-primary)] mt-1">
-                      {activeManifesto ? activeManifesto.title : "Create your first recording"}
+                      {activeManifesto ? activeManifesto.title : t.forge_emergency_create_first}
                     </h3>
                     {activeManifesto && (
                       <p className="text-sm text-[var(--text-secondary)] mt-2">
@@ -969,7 +974,7 @@ export default function ForgePage() {
                   <div className="space-y-4 mt-4">
                     <div className="card bg-[var(--bg-elevated)]">
                       <div className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                        Your words
+                        {t.forge_emergency_your_words}
                       </div>
                       <p className="text-sm font-semibold text-[var(--text-primary)] whitespace-pre-line">
                         {activeManifesto.promise}
@@ -993,20 +998,20 @@ export default function ForgePage() {
                         className="btn-fire flex-1 flex items-center justify-center gap-2"
                       >
                         <Play className="w-5 h-5" />
-                        Play Recording
+                        {t.forge_play_recording}
                       </button>
                       <button
                         onClick={handleCopyEmergencyScript}
                         className="btn-ghost flex-1 flex items-center justify-center gap-2"
                       >
                         {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                        {copied ? "Copied" : "Copy Ritual"}
+                        {copied ? t.forge_copied : t.forge_copy_ritual}
                       </button>
                     </div>
                   </div>
                 ) : (
                   <p className="text-sm text-[var(--text-muted)] mt-4">
-                    Your emergency ritual appears here right after the first recording.
+                    {t.forge_emergency_no_ritual}
                   </p>
                 )}
               </div>
@@ -1017,14 +1022,14 @@ export default function ForgePage() {
               <div className="card space-y-3">
                 <div>
                   <div className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)]">
-                    Saved Recordings
+                    {t.forge_history_saved}
                   </div>
-                  <div className="text-sm text-[var(--text-secondary)]">The last 10 versions of your promise</div>
+                  <div className="text-sm text-[var(--text-secondary)]">{t.forge_history_last10}</div>
                 </div>
 
                 {savedManifestos.length === 0 ? (
                   <p className="text-sm text-[var(--text-muted)]">
-                    No recordings yet. Make the first one and turn it into your personal anti-relapse alarm.
+                    {t.forge_history_empty}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -1064,21 +1069,21 @@ export default function ForgePage() {
                           <div className="grid gap-3">
                             <div className="rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-default)] p-3">
                               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                                Promise
+                                {t.forge_history_promise}
                               </div>
                               <p className="text-sm text-[var(--text-primary)] whitespace-pre-line">{entry.promise}</p>
                             </div>
 
                             <div className="rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-default)] p-3">
                               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                                Trigger Prompt
+                                {t.forge_history_trigger_prompt}
                               </div>
                               <p className="text-sm text-[var(--text-secondary)]">{entry.triggerPrompt}</p>
                             </div>
 
                             <div className="rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-default)] p-3">
                               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                                Audio Recording
+                                {t.forge_history_audio}
                               </div>
                               {manifestoAudioUrls[entry.id] ? (
                                 <audio
@@ -1089,7 +1094,7 @@ export default function ForgePage() {
                                 />
                               ) : (
                                 <p className="text-sm text-[var(--text-muted)]">
-                                  Audio is loading from local storage...
+                                  {t.forge_history_loading_audio}
                                 </p>
                               )}
                             </div>

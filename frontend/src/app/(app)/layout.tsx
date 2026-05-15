@@ -20,22 +20,22 @@ import { useRouter } from "next/navigation";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useT } from "@/lib/i18n";
 
-const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "War Room" },
-  { href: "/habits", icon: Swords, label: "Habits" },
-  { href: "/checkin", icon: CalendarCheck, label: "Check-in" },
-  { href: "/journal", icon: Mic, label: "Journal" },
-  { href: "/insights", icon: Brain, label: "AI Insights" },
-  { href: "/oracle", icon: MessageCircle, label: "Ask Oracle" },
-  { href: "/identity", icon: Shield, label: "Identity Lab" },
-  { href: "/forge", icon: Flame, label: "HabitRefactor" },
-  { href: "/pain", icon: BarChart3, label: "Pain Data" },
-];
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useT();
+
+  const navItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: t.nav_war_room },
+    { href: "/habits", icon: Swords, label: t.nav_habits },
+    { href: "/checkin", icon: CalendarCheck, label: t.nav_checkin },
+    { href: "/journal", icon: Mic, label: t.nav_journal },
+    { href: "/insights", icon: Brain, label: t.nav_insights },
+    { href: "/oracle", icon: MessageCircle, label: t.nav_oracle },
+    { href: "/identity", icon: Shield, label: t.nav_identity },
+    { href: "/forge", icon: Flame, label: t.nav_forge },
+    { href: "/pain", icon: BarChart3, label: t.nav_pain },
+  ];
 
   const handleLogout = async () => {
     const supabase = createClient();

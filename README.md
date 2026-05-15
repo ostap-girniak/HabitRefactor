@@ -21,13 +21,13 @@
   GitHub-style 365-day heatmap, hourly and weekday risk analysis, streak breakdowns, and trigger pattern visualization.
 
 - **🚨 Smart Notification System**  
-  4 types of behavioral pattern alerts (high-risk hour, dangerous weekday, consecutive relapses, streak break point) + journal danger detection + scheduled reminders. All timezone-aware with cooldown protection.
+  4 types of behavioral pattern alerts (high-risk hour, dangerous weekday, consecutive relapses, streak break point) + journal danger detection + scheduled reminders + streak milestone celebrations. All timezone-aware with cooldown protection. Bilingual (UK/EN).
 
 - **🔥 Pain & Pleasure Projections**  
   AI-generated cost-of-inaction projections using your own journal entries as context.
 
 - **📚 Knowledge Base RAG**  
-  59+ curated entries (books, YouTube, CBT strategies, Ukrainian resources) with pgvector semantic search. Oracle pulls the most relevant wisdom for your exact situation.
+  85+ curated entries (books, YouTube, CBT strategies, Ukrainian resources) with pgvector semantic search. Oracle pulls the most relevant wisdom for your exact situation.
 
 - **🌍 Ukrainian & English UI**  
   Full interface localization with an EN/UK switcher in Settings.
@@ -53,7 +53,7 @@
 - **Fallback AI:** OpenAI-compatible providers (Groq/DeepSeek)
 - **Vector Search:** pgvector (768-dim embeddings via Gemini)
 - **Database:** Supabase (PostgreSQL + RLS)
-- **Background Workers:** APScheduler (pattern interceptor, relapse alerts, journal scanner)
+- **Background Workers:** APScheduler (pattern interceptor, relapse alerts, journal scanner, milestone tracker)
 - **Push Notifications:** PyWebPush (VAPID)
 
 ---
@@ -63,7 +63,7 @@
 ### Prerequisites
 - [Node.js 18+](https://nodejs.org/)
 - [Python 3.10+](https://www.python.org/)
-- [Supabase Account](https://supabase.com/)
+- [Supabase Account](https://supabase.com/) — free tier is enough
 - [Google AI Studio Key](https://aistudio.google.com/) (Gemini)
 
 ---
@@ -72,28 +72,38 @@
 
 ```bash
 cd backend
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `backend/.env`:
+Edit `backend/.env` with your values (see comments in the file). The minimum required fields are:
+
 ```env
-SUPABASE_URL=your_supabase_url
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 GEMINI_API_KEY=your_google_ai_key
-GEMINI_MODEL=gemini-2.0-flash
-GEMINI_EMBEDDING_MODEL=text-embedding-004
-ENABLE_RELAPSE_INTERCEPTOR=true
-ENABLE_PATTERN_INTERCEPTOR=true
 VAPID_PUBLIC_KEY=your_vapid_public_key
 VAPID_PRIVATE_KEY=your_vapid_private_key
-VAPID_CONTACT_EMAIL=mailto:your_email@example.com
+VAPID_EMAIL=mailto:your_email@example.com
 ```
 
+Generate VAPID keys (required for push notifications):
+```bash
+npx web-push generate-vapid-keys
+```
+
+Start the server:
 ```bash
 python -m uvicorn app.main:app --reload
 ```
+
 API docs: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
 
 ---
@@ -108,7 +118,7 @@ cp .env.local.example .env.local
 
 Edit `frontend/.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
@@ -123,11 +133,11 @@ App: [http://localhost:3000](http://localhost:3000)
 
 ## 🏗️ Database Setup
 
-Run SQL scripts from `/database/` in Supabase SQL Editor in order:
+Run SQL scripts from `/database/` in the **Supabase SQL Editor** in this order:
 
 | File | Description |
 |------|-------------|
-| `migration.sql` | Full schema (run this first on a fresh DB) |
+| `migration.sql` | Full schema — run this first on a fresh DB |
 | `007_relapse_interceptor_upgrade.sql` | Relapse interceptor tables |
 | `008_notification_history.sql` | Notification history |
 | `009_oracle_chat.sql` | Oracle chat tables |
@@ -135,7 +145,13 @@ Run SQL scripts from `/database/` in Supabase SQL Editor in order:
 | `seed_knowledge_base.sql` | English knowledge base (59+ entries) |
 | `011_ukrainian_knowledge_base.sql` | Ukrainian knowledge base (26 entries) |
 
-After inserting knowledge base data, generate embeddings via the backend (see API docs).
+After running the seed scripts, generate embeddings so the Oracle RAG works:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/ai/embed-knowledge-base
+```
+
+This is safe to call multiple times — it skips rows that already have embeddings.
 
 ---
 

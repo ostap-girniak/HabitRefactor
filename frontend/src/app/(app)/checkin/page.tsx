@@ -326,7 +326,7 @@ function CheckinContent() {
           </div>
 
           <button onClick={nextStep} className="btn-fire w-full">
-            Continue <ChevronRight className="w-4 h-4 inline ml-1" />
+            {t.checkin_continue} <ChevronRight className="w-4 h-4 inline ml-1" />
           </button>
         </div>
       )}
@@ -429,7 +429,7 @@ function CheckinContent() {
           </div>
 
           <button onClick={nextStep} className="btn-fire w-full">
-            Continue <ChevronRight className="w-4 h-4 inline ml-1" />
+            {t.checkin_continue} <ChevronRight className="w-4 h-4 inline ml-1" />
           </button>
         </div>
       )}
@@ -514,7 +514,7 @@ function CheckinContent() {
             </div>
             {result === "success" && (
               <div className="absolute -top-2 -right-2 bg-[var(--accent-fire)] text-white text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-tighter animate-bounce">
-                +1 Day
+                {t.checkin_plus_one_day}
               </div>
             )}
           </div>

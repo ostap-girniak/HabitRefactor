@@ -14,6 +14,7 @@ from supabase import AsyncClient
 from app.config import get_settings
 from app.dependencies import get_authenticated_client, get_current_user
 from app.notifications.push import send_web_push, save_notification_to_history
+from app.notifications import templates as nt
 from app.stats.oracle import compute_oracle
 
 router = APIRouter()
@@ -110,6 +111,8 @@ async def subscribe_push(
             .execute()
         )
         if not (existing.data or []):
+            user_lang = await nt.get_user_lang(client, str(user.id))
+            default_title, default_message = nt.pick_danger_default(user_lang)
             await (
                 client.table("reminders")
                 .insert(
@@ -119,8 +122,8 @@ async def subscribe_push(
                         "reminder_type": ReminderType.danger_zone.value,
                         "is_smart": True,
                         "is_enabled": True,
-                        "title": "🔥 Danger Zone",
-                        "message": "High relapse risk detected. Open your War Room now.",
+                        "title": default_title,
+                        "message": default_message,
                     }
                 )
                 .execute()
@@ -179,8 +182,8 @@ async def send_test_push(
 
     sent = 0
     deactivated = 0
-    title = "🔥 Test push"
-    body = "Push is working. Stay hard."
+    user_lang = await nt.get_user_lang(client, str(user.id))
+    title, body = nt.pick_test(user_lang)
     for sub in subs:
         err = await send_web_push(
             settings=settings,
@@ -251,14 +254,19 @@ async def danger_check_now(
     subs = subs_resp.data or []
 
     sent = 0
+    user_lang = await nt.get_user_lang(client, str(user.id))
+    warning_text = forecast.get("warning_report") or ""
+    if not warning_text:
+        _, warning_text = nt.pick_danger_default(user_lang)
+    title, body = nt.pick_danger_manual(user_lang, warning=warning_text)
     for sub in subs:
         if sub.get("is_active") is False:
             continue
         err = await send_web_push(
             settings=settings,
             subscription=sub,
-            title="🔥 Danger Zone (manual check)",
-            body=(forecast.get("warning_report") or "High risk detected. Open your War Room."),
+            title=title,
+            body=body,
             url="/dashboard",
             tag="danger-zone-manual",
         )
@@ -323,20 +331,16 @@ async def journal_alert(
     is_danger = len(found_keywords) >= 1 or (mood is not None and mood <= 3)
 
     # 3. Build notification content
+    user_lang = await nt.get_user_lang(client, str(user.id))
     if is_danger:
-        title = "⚠️ Danger signal detected"
         snippet = text[:80].strip() + ("..." if len(text) > 80 else "")
-        body = f"Your journal entry suggests a struggle: \"{snippet}\". Open the app — you're stronger than this."
+        title, body = nt.pick_journal_danger(user_lang, snippet=snippet)
         notification_type = "danger_zone"
         url = "/dashboard"
         tag = "journal-danger-alert"
     else:
-        title = "💪 Journal analyzed — keep going!"
         themes = entry.get("key_themes") or []
-        if themes:
-            body = f"Themes detected: {', '.join(themes[:3])}. Stay on the path, warrior."
-        else:
-            body = "Your entry has been recorded. Consistency is the weapon. Stay hard."
+        title, body = nt.pick_journal_motivation(user_lang, themes=themes)
         notification_type = "motivation"
         url = "/journal"
         tag = "journal-motivation"
