@@ -4,64 +4,51 @@ function getBackendBaseUrl() {
   return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 }
 
+// Headers that must not be forwarded (hop-by-hop) or that would cause the
+// browser to double-decode an already-decoded buffer.
+const STRIPPED_RESPONSE_HEADERS = new Set([
+  "content-encoding",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "content-length",
+]);
+
 async function proxy(req: NextRequest, pathParts: string[]) {
   const joinedPath = pathParts.join("/");
-  // Do NOT force a trailing slash — FastAPI returns 307 redirect if we do,
-  // which causes "detached ArrayBuffer" crash in the proxy body reader.
-  const upstreamUrl = new URL(
-    `${getBackendBaseUrl()}/api/v1/${joinedPath}${req.nextUrl.search}`
-  );
+  const upstreamUrl = `${getBackendBaseUrl()}/api/v1/${joinedPath}${req.nextUrl.search}`;
 
   const headers = new Headers(req.headers);
   headers.delete("host");
+  headers.delete("content-length");
 
   const method = req.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
-  // Read body once and store in a buffer so it can be reused if needed
-  const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
-  const body = bodyBuffer && bodyBuffer.byteLength > 0 ? bodyBuffer : undefined;
+  const body = hasBody ? await req.arrayBuffer() : undefined;
 
   const upstreamRes = await fetch(upstreamUrl, {
     method,
     headers,
-    body,
-    // "manual" lets us handle redirects ourselves without re-reading the body
-    redirect: "manual",
+    body: body && body.byteLength > 0 ? body : undefined,
+    redirect: "follow",
   });
 
-  // If FastAPI returns a 3xx redirect, follow it manually without a body (safe)
-  if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-    const location = upstreamRes.headers.get("location");
-    if (location) {
-      const redirectUrl = location.startsWith("http")
-        ? new URL(location)
-        : new URL(`${getBackendBaseUrl()}${location}`);
-      const redirectRes = await fetch(redirectUrl, {
-        method,
-        headers,
-        body,
-        redirect: "follow",
-      });
-      const resHeaders2 = new Headers(redirectRes.headers);
-      resHeaders2.delete("content-encoding");
-      resHeaders2.delete("transfer-encoding");
-      resHeaders2.delete("connection");
-      return new NextResponse(redirectRes.body, {
-        status: redirectRes.status,
-        headers: resHeaders2,
-      });
+  // Buffer the full body. Streaming through Next.js Route Handlers in
+  // production has caused responses to hang in the browser (Pending state)
+  // when content-encoding / transfer-encoding flags didn't line up with the
+  // actual bytes Node's fetch already decoded for us.
+  const responseBuffer = await upstreamRes.arrayBuffer();
+
+  const responseHeaders = new Headers();
+  upstreamRes.headers.forEach((value, key) => {
+    if (!STRIPPED_RESPONSE_HEADERS.has(key.toLowerCase())) {
+      responseHeaders.set(key, value);
     }
-  }
+  });
 
-  const resHeaders = new Headers(upstreamRes.headers);
-  // Avoid headers Next.js may not allow to set explicitly
-  resHeaders.delete("content-encoding");
-  resHeaders.delete("transfer-encoding");
-  resHeaders.delete("connection");
-
-  return new NextResponse(upstreamRes.body, {
+  return new NextResponse(responseBuffer, {
     status: upstreamRes.status,
-    headers: resHeaders,
+    headers: responseHeaders,
   });
 }
 
