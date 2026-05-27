@@ -3,11 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import { useT } from "@/lib/i18n";
+import { useUIStore } from "@/lib/store";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const t = useT();
+  const { language, setLanguage } = useUIStore();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,7 +25,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters. No weak links.");
+      setError(t.register_password_error);
       setLoading(false);
       return;
     }
@@ -44,7 +48,7 @@ export default function RegisterPage() {
         router.push("/dashboard");
       }
     } catch {
-      setError("Registration failed. Try again — warriors don't quit.");
+      setError(t.register_error_generic);
     } finally {
       setLoading(false);
     }
@@ -53,6 +57,15 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative">
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[400px] bg-[radial-gradient(ellipse_at_center,rgba(255,77,0,0.1)_0%,transparent_70%)] pointer-events-none" />
+
+      {/* Language switcher - top right */}
+      <button
+        onClick={() => setLanguage(language === "en" ? "uk" : "en")}
+        className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)] hover:border-[var(--accent-fire)] transition-colors text-sm font-medium text-[var(--text-secondary)] z-10"
+      >
+        <Globe className="w-4 h-4" />
+        {language === "en" ? "UK 🇺🇦" : "EN 🇬🇧"}
+      </button>
 
       <div className="w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
@@ -66,10 +79,10 @@ export default function RegisterPage() {
             </div>
           </Link>
           <h1 className="text-2xl font-black text-[var(--text-primary)]">
-            Enter The Forge
+            {t.register_title}
           </h1>
           <p className="text-[var(--text-secondary)] mt-2 text-sm">
-            Today you decide to stop being a victim of your habits.
+            {t.register_subtitle}
           </p>
         </div>
 
@@ -83,7 +96,7 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Your Name
+                {t.register_name}
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
@@ -92,8 +105,9 @@ export default function RegisterPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="input-forge pl-11"
-                  placeholder="Warrior"
+                  className="input-forge"
+                  style={{ paddingLeft: "2.75rem" }}
+                  placeholder={t.register_name_placeholder}
                   required
                 />
               </div>
@@ -101,7 +115,7 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Email
+                {t.register_email}
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
@@ -110,7 +124,8 @@ export default function RegisterPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-forge pl-11"
+                  className="input-forge"
+                  style={{ paddingLeft: "2.75rem" }}
                   placeholder="warrior@forge.com"
                   required
                 />
@@ -119,7 +134,7 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Password
+                {t.register_password}
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
@@ -128,8 +143,9 @@ export default function RegisterPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-forge pl-11 pr-14"
-                  placeholder="Minimum 8 characters"
+                  className="input-forge"
+                  style={{ paddingLeft: "2.75rem", paddingRight: "3.5rem" }}
+                  placeholder={t.register_password_placeholder}
                   required
                   minLength={8}
                 />
@@ -150,15 +166,15 @@ export default function RegisterPage() {
               disabled={loading}
               className="btn-fire w-full py-3 text-base disabled:opacity-50"
             >
-              {loading ? "Forging your account..." : "I'm Ready. Let's Go. 🔥"}
+              {loading ? t.register_loading : t.register_submit}
             </button>
           </form>
         </div>
 
         <p className="text-center mt-6 text-sm text-[var(--text-secondary)]">
-          Already forging?{" "}
+          {t.register_has_account}{" "}
           <Link href="/login" className="text-[var(--accent-fire)] font-semibold hover:underline">
-            Sign in
+            {t.register_login_link}
           </Link>
         </p>
       </div>

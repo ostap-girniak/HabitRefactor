@@ -3,11 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import { useT } from "@/lib/i18n";
+import { useUIStore } from "@/lib/store";
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
+  const { language, setLanguage } = useUIStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,7 +36,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch {
-      setError("Something went wrong. Stay hard and try again.");
+      setError(t.login_error_generic);
     } finally {
       setLoading(false);
     }
@@ -53,6 +57,15 @@ export default function LoginPage() {
       {/* Background glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[400px] bg-[radial-gradient(ellipse_at_center,rgba(255,77,0,0.1)_0%,transparent_70%)] pointer-events-none" />
 
+      {/* Language switcher - top right */}
+      <button
+        onClick={() => setLanguage(language === "en" ? "uk" : "en")}
+        className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)] hover:border-[var(--accent-fire)] transition-colors text-sm font-medium text-[var(--text-secondary)] z-10"
+      >
+        <Globe className="w-4 h-4" />
+        {language === "en" ? "UK 🇺🇦" : "EN 🇬🇧"}
+      </button>
+
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -66,10 +79,10 @@ export default function LoginPage() {
             </div>
           </Link>
           <h1 className="text-2xl font-black text-[var(--text-primary)]">
-            Welcome Back, Warrior
+            {t.login_title}
           </h1>
           <p className="text-[var(--text-secondary)] mt-2 text-sm">
-            The forge awaits. Step back in.
+            {t.login_subtitle}
           </p>
         </div>
 
@@ -85,7 +98,7 @@ export default function LoginPage() {
             {/* Email */}
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Email
+                {t.login_email}
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
@@ -94,7 +107,8 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-forge pl-11"
+                  className="input-forge"
+                  style={{ paddingLeft: "2.75rem" }}
                   placeholder="warrior@forge.com"
                   required
                 />
@@ -104,7 +118,7 @@ export default function LoginPage() {
             {/* Password */}
             <div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                Password
+                {t.login_password}
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
@@ -113,7 +127,8 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-forge pl-11 pr-14"
+                  className="input-forge"
+                  style={{ paddingLeft: "2.75rem", paddingRight: "3.5rem" }}
                   placeholder="••••••••"
                   required
                 />
@@ -139,7 +154,7 @@ export default function LoginPage() {
               disabled={loading}
               className="btn-fire w-full py-3 text-base disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Entering the forge..." : "Enter The Forge 🔥"}
+              {loading ? t.login_loading : t.login_submit}
             </button>
           </form>
 
@@ -147,7 +162,7 @@ export default function LoginPage() {
           <div className="flex items-center gap-4 my-6">
             <div className="h-px flex-1 bg-[var(--border-default)]" />
             <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide">
-              or
+              {t.login_or}
             </span>
             <div className="h-px flex-1 bg-[var(--border-default)]" />
           </div>
@@ -176,18 +191,18 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continue with Google
+            {t.login_google}
           </button>
         </div>
 
         {/* Register link */}
         <p className="text-center mt-6 text-sm text-[var(--text-secondary)]">
-          New to the forge?{" "}
+          {t.login_no_account}{" "}
           <Link
             href="/register"
             className="text-[var(--accent-fire)] font-semibold hover:underline"
           >
-            Create your account
+            {t.login_register_link}
           </Link>
         </p>
       </div>
