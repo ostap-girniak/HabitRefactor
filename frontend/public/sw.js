@@ -1,7 +1,7 @@
 // Catalyst Forge — Service Worker
 // Handles push notifications and basic offline caching
 
-const CACHE_NAME = "catalyst-forge-v2";
+const CACHE_NAME = "catalyst-forge-v3";
 const STATIC_ASSETS = ["/", "/dashboard", "/login", "/register", "/offline.html"];
 
 // Install: cache static assets
