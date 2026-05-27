@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: habitrefactor-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false
+      - key: ENABLE_PATTERN_INTERCEPTOR
+        value: "true"
+      - key: ENABLE_RELAPSE_INTERCEPTOR
+        value: "false"
+      - key: ENABLE_SCHEDULED_REMINDERS
+        value: "false"
