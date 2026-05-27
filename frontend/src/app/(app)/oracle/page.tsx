@@ -50,7 +50,7 @@ interface OracleSession {
 const renderWithLinks = (text: string) => {
   if (!text) return null;
   const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-  const parts: JSX.Element[] = [];
+  const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
