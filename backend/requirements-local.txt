@@ -1,0 +1,12 @@
+# Local development requirements
+# Includes everything from requirements.txt PLUS voice/video transcription deps.
+# Use this for local dev so voice/video journals work.
+#
+# Install: pip install -r requirements-local.txt
+
+-r requirements.txt
+
+# Audio processing — local Whisper transcription
+# ~400 MB RAM, too heavy for Render free tier
+faster-whisper
+imageio-ffmpeg

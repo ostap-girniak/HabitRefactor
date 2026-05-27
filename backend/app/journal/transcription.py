@@ -32,9 +32,17 @@ def get_whisper_model():
             print(f"[AI] Embedded ffmpeg registered: {ffmpeg_exe}")
         except ImportError:
             print("[AI] Warning: imageio-ffmpeg not found. Assuming ffmpeg is in PATH.")
-        
+
         print("[AI] Loading local Whisper base model...")
-        from faster_whisper import WhisperModel
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as e:
+            raise RuntimeError(
+                "Voice/video journals require the `faster-whisper` package, which is "
+                "disabled by default to keep low-memory hosts (Render free tier) viable. "
+                "To enable: uncomment `faster-whisper` and `imageio-ffmpeg` in "
+                "backend/requirements.txt and redeploy. Text journals work without it."
+            ) from e
         # Load CPU version optimized with int8
         _WHISPER_MODEL = WhisperModel("base", device="cpu", compute_type="int8")
         print("[AI] Whisper model loaded successfully.")

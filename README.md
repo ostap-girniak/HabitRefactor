@@ -95,11 +95,15 @@ venv\Scripts\activate
 # macOS/Linux:
 source venv/bin/activate
 
-pip install -r requirements.txt   # file: backend/requirements.txt
-cp .env.example .env              # file: backend/.env.example
+pip install -r requirements-local.txt   # local: includes voice/video transcription
+# For production / Render free tier use the lighter file instead:
+# pip install -r requirements.txt
+cp .env.example .env                    # file: backend/.env.example
 # Windows (PowerShell) instead of cp:
 # copy .env.example .env
 ```
+
+> ℹ️ `requirements-local.txt` додає `faster-whisper` + `imageio-ffmpeg` (~400 MB RAM) для голосових/відео-журналів. `requirements.txt` — мінімальний, текстові журнали працюють і там.
 
 Edit `backend/.env` with your values (see comments in the file). The minimum required fields are:
 

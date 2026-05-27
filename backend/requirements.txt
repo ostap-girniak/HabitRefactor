@@ -30,6 +30,8 @@ pytest==8.*
 pytest-asyncio==0.*
 httpx==0.*
 
-# Audio processing
-faster-whisper
-imageio-ffmpeg
+# Audio processing (optional — for local voice/video transcription)
+# Disabled by default to keep Render free tier (512 MB RAM) viable.
+# Uncomment locally if you want voice/video journals:
+# faster-whisper
+# imageio-ffmpeg
