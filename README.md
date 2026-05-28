@@ -1,10 +1,18 @@
 # HabitRefactor 🔥
 
-🇺🇦 [Українська версія](README.uk.md) · 🤖 [AI architecture](docs/AI.md) · 🚀 [Deployment guide](DEPLOYMENT.md)
+🇺🇦 [Українська версія](README.uk.md) · 🤖 [AI architecture](docs/AI.md) · 🗺️ [Roadmap](docs/ROADMAP.md)
 
 > **Refactor your habits, reforge your identity.**
 
 **HabitRefactor** is a next-generation habit tracking and psychological transformation platform. Unlike traditional checklists, it leverages **Gemini 2.0 AI** to analyze the emotional undercurrents of your journey through multimodal journaling (voice, video, and text), mapping your progress not just in streaks, but in identity shifts.
+
+## 🌐 Live Demo
+
+- **App:** [habit-refactor.vercel.app](https://habit-refactor.vercel.app)
+- **API:** [habitrefactor.onrender.com](https://habitrefactor.onrender.com)
+- **API docs (Swagger):** [habitrefactor.onrender.com/api/v1/docs](https://habitrefactor.onrender.com/api/v1/docs)
+
+> First request to the API may take ~30 seconds — Render free tier sleeps the container after 15 minutes of inactivity.
 
 ---
 
@@ -29,13 +37,16 @@
   AI-generated cost-of-inaction projections using your own journal entries as context.
 
 - **📚 Knowledge Base RAG**  
-  85+ curated entries (books, YouTube, CBT strategies, Ukrainian resources) with pgvector semantic search. Oracle pulls the most relevant wisdom for your exact situation.
+  59 curated entries (33 English + 26 Ukrainian) covering books, YouTube, CBT strategies, addiction science. pgvector semantic search. Oracle pulls the most relevant wisdom for your exact situation.
 
 - **🌍 Ukrainian & English UI**  
   Full interface localization with an EN/UK switcher in Settings.
 
 - **📱 PWA Ready**  
-  Installable on mobile devices as a Progressive Web App with background sync and iOS Safari support.
+  Installable on mobile devices as a Progressive Web App. Offline mode with cached UI shell. iOS Safari support (16.4+ for Web Push).
+
+- **🎓 First-Visit Guided Tour**  
+  An 8-slide modal walks new visitors through every major feature (identity lab, AI journal, Oracle, smart push). Shows once, stored in localStorage.
 
 ---
 
@@ -219,7 +230,7 @@ Run SQL scripts from `/database/` in the **Supabase SQL Editor** in this order:
 | `008_notification_history.sql` | Notification history |
 | `009_oracle_chat.sql` | Oracle chat tables |
 | `010_oracle_sessions.sql` | Oracle session management |
-| `seed_knowledge_base.sql` | English knowledge base (59+ entries) |
+| `seed_knowledge_base.sql` | English knowledge base (33 entries) |
 | `011_ukrainian_knowledge_base.sql` | Ukrainian knowledge base (26 entries) |
 
 **Do NOT also run** `001_extensions.sql` … `006_functions.sql` if you already ran `migration.sql` — those files are the same schema split into parts. Running both causes duplicate-type / duplicate-table errors.

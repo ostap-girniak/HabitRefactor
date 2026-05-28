@@ -1,10 +1,18 @@
 # HabitRefactor 🔥
 
-🇬🇧 [English version](README.md) · 🤖 [Архітектура AI](docs/AI.uk.md)
+🇬🇧 [English version](README.md) · 🤖 [Архітектура AI](docs/AI.uk.md) · 🗺️ [Roadmap](docs/ROADMAP.md)
 
 > **Перебудуй звички — переосмисли себе.**
 
 **HabitRefactor** — платформа нового покоління для відстеження звичок і психологічної трансформації. На відміну від звичайних чеклістів, вона використовує **Gemini 2.0 AI** для аналізу емоційного підґрунтя вашої подорожі через мультимодальне ведення щоденника (голос, відео та текст), відображаючи прогрес не лише у вигляді серій (streaks), а й у змінах ідентичності.
+
+## 🌐 Жива демоверсія
+
+- **Застосунок:** [habit-refactor.vercel.app](https://habit-refactor.vercel.app)
+- **API:** [habitrefactor.onrender.com](https://habitrefactor.onrender.com)
+- **API-документація (Swagger):** [habitrefactor.onrender.com/api/v1/docs](https://habitrefactor.onrender.com/api/v1/docs)
+
+> Перший запит до API може зайняти ~30 секунд — Render free tier усипляє контейнер після 15 хв простою.
 
 ---
 
@@ -29,13 +37,16 @@
   AI-генеровані проєкції «ціни бездіяльності» з використанням ваших записів у щоденнику як контексту.
 
 - **📚 Knowledge Base RAG**  
-  85+ кураторських записів (книги, YouTube, стратегії КПТ, українські ресурси) з семантичним пошуком pgvector. Oracle підбирає найрелевантнішу мудрість саме для вашої ситуації.
+  59 кураторських записів (33 англомовних + 26 українських) — книги, YouTube, КПТ-стратегії, addiction science. Семантичний пошук pgvector. Oracle підбирає найрелевантнішу мудрість для вашої ситуації.
 
 - **🌍 Український та англійський інтерфейс**  
   Повна локалізація інтерфейсу з перемикачем EN/UK у налаштуваннях.
 
 - **📱 PWA Ready**  
-  Можна встановити на мобільні пристрої як Progressive Web App з фоновою синхронізацією та підтримкою iOS Safari.
+  Встановлюється на мобільні пристрої як Progressive Web App. Офлайн-режим з кешованим UI-shell. Підтримка iOS Safari (16.4+ для Web Push).
+
+- **🎓 Тур для нових відвідувачів**  
+  Модальний 8-слайдовий тур знайомить нових користувачів з усіма основними фічами (Identity Lab, AI-журнал, Oracle, smart push). Показується одноразово через localStorage.
 
 ---
 
@@ -215,7 +226,7 @@ python test_supabase.py
 | `008_notification_history.sql` | Історія сповіщень |
 | `009_oracle_chat.sql` | Таблиці Oracle chat |
 | `010_oracle_sessions.sql` | Керування сесіями Oracle |
-| `seed_knowledge_base.sql` | Англомовна база знань (59+ записів) |
+| `seed_knowledge_base.sql` | Англомовна база знань (33 записи) |
 | `011_ukrainian_knowledge_base.sql` | Українська база знань (26 записів) |
 
 **НЕ запускайте** також `001_extensions.sql` … `006_functions.sql`, якщо уже виконали `migration.sql` — це та сама схема частинами. Подвійний запуск дає помилки duplicate type/table.
