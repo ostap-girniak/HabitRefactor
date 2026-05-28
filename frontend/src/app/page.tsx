@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useUIStore } from "@/lib/store";
+import { GuestTour } from "@/components/landing/GuestTour";
 
 export default function LandingPage() {
   const t = useT();
@@ -80,6 +81,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
+      <GuestTour />
       {/* Hero Section */}
       <header className="relative overflow-hidden">
         {/* Gradient overlay */}
