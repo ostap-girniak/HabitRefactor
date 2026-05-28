@@ -86,6 +86,10 @@ There is **no** `requirements.txt` or `.env` in the repo root — always look in
 
 ## 🚀 Getting Started
 
+> 👤 **Just want to use the app?** Open the [Live Demo](#-live-demo) link above — no setup required.
+>
+> 🛠️ **Want to develop / self-host?** Follow the steps below to run your own copy locally.
+
 ### Prerequisites
 - [Node.js 18+](https://nodejs.org/)
 - [Python 3.10+](https://www.python.org/)
