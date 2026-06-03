@@ -231,14 +231,15 @@ python test_supabase.py
 | `009_oracle_chat.sql` | Таблиці Oracle chat |
 | `010_oracle_sessions.sql` | Керування сесіями Oracle |
 | `012_identity_statement_affirmation.sql` | Виправлення схеми щоденних тверджень identity |
+| `013_ai_analyses_schema_compatibility.sql` | Виправлення схеми щоденного/тижневого AI-аналізу |
 | `seed_knowledge_base.sql` | Англомовна база знань (33 записи) |
 | `011_ukrainian_knowledge_base.sql` | Українська база знань (26 записів) |
 
 **НЕ запускайте** також `001_extensions.sql` … `006_functions.sql`, якщо уже виконали `migration.sql` — це та сама схема частинами. Подвійний запуск дає помилки duplicate type/table.
 
 **Чиста БД vs існуюча:**
-- **Новий проєкт:** один раз `migration.sql`, потім `007` → `010`, потім `012`, потім обидва seed-файли.
-- **Стара версія `migration.sql` уже була:** все одно виконайте `007`–`010` і `012` (безпечні `IF NOT EXISTS`). Повторний `migration.sql` на заповненій БД може падати на типах.
+- **Новий проєкт:** один раз `migration.sql`, потім `007` → `010`, потім `012` → `013`, потім обидва seed-файли.
+- **Стара версія `migration.sql` уже була:** все одно виконайте `007`–`010` і `012`–`013` (безпечні `IF NOT EXISTS`). Повторний `migration.sql` на заповненій БД може падати на типах.
 
 **Oracle / чат не працюватимуть** без `009_oracle_chat.sql` і `010_oracle_sessions.sql` — їх немає всередині `migration.sql`.
 
@@ -286,8 +287,8 @@ Invoke-WebRequest -Method POST -Uri "http://127.0.0.1:8000/api/v1/ai/embed-knowl
 |----------|------------------|---------|
 | Oracle відповідає загально, без посилань на книги | Немає embeddings | Seeds + `POST /api/v1/ai/embed-knowledge-base` |
 | `extension "vector" does not exist` | pgvector не ввімкнено | `migration.sql` створює extension; на Supabase зазвичай ок |
-| SQL-помилки при повторному запуску | Дубль міграції | Не перезапускайте `migration.sql` на існуючій БД; лише `007`–`012` |
-| Duplicate enum/type | Запускали `001`–`006` після `migration.sql` | Лише `migration.sql` + `007`–`012` |
+| SQL-помилки при повторному запуску | Дубль міграції | Не перезапускайте `migration.sql` на існуючій БД; лише `007`–`013` |
+| Duplicate enum/type | Запускали `001`–`006` після `migration.sql` | Лише `migration.sql` + `007`–`013` |
 
 ### AI (Gemini)
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Brain,
-  TrendingUp,
   AlertTriangle,
   Trophy,
   Search,
@@ -12,24 +12,49 @@ import {
   Clock,
   ThumbsUp,
   ThumbsDown,
-  Swords,
   Trash2,
 } from "lucide-react";
 import { useAIInsights, useGenerateDailyAnalysis, useGenerateWeeklyAnalysis, useDeleteAIInsight } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
+import { useUIStore } from "@/lib/store";
+
+interface InsightItem {
+  type: string;
+  title: string;
+  description: string;
+  severity?: number;
+}
+
+interface Recommendation {
+  type?: string;
+  title: string;
+  description: string;
+}
+
+interface TriggerPattern {
+  trigger: string;
+  frequency: string;
+  correlation: string;
+}
 
 interface Insight {
   id: string;
-  analysis_type: string;
+  analysis_type?: string;
+  type?: string;
   title: string;
   summary: string;
   created_at: string;
   severity_score: number;
-  insights: { type: string; title: string; description: string; severity: number }[];
-  recommendations: { type: string; title: string; description: string }[];
-  trigger_patterns: { trigger: string; frequency: string; correlation: string }[];
-  tomorrow_action: string;
-  motivational_close: string;
+  full_analysis?: string;
+  insights?: InsightItem[];
+  recommendations?: Recommendation[];
+  trigger_patterns?: TriggerPattern[];
+  tomorrow_action?: string;
+  motivational_close?: string;
+}
+
+interface InsightsResponse {
+  insights?: Insight[];
 }
 
 const renderWithLinks = (text: string) => {
@@ -68,6 +93,7 @@ const renderWithLinks = (text: string) => {
 
 export default function InsightsPage() {
   const t = useT();
+  const language = useUIStore((s) => s.language);
   const { data: insightsData, isLoading } = useAIInsights();
   const generateAnalysis = useGenerateDailyAnalysis();
   const generateWeekly = useGenerateWeeklyAnalysis();
@@ -75,22 +101,41 @@ export default function InsightsPage() {
 
   const [selectedInsight, setSelectedInsight] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pattern" | "warning" | "victory">("all");
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const insights = (insightsData as any)?.insights || [];
-  const selected = insights.find((i: any) => i.id === selectedInsight);
+  const insights = ((insightsData as InsightsResponse | undefined)?.insights || []);
+  const selected = insights.find((i) => i.id === selectedInsight);
 
   const handleGenerateAnalysis = async () => {
+    setActionError(null);
     try {
-      await generateAnalysis.mutateAsync({});
+      await generateAnalysis.mutateAsync({ language });
     } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      setActionError(
+        typeof detail === "string"
+          ? detail
+          : language === "uk"
+            ? "Не вдалося згенерувати щоденний аналіз. Спробуй ще раз за хвилину."
+            : "Failed to generate daily analysis. Try again in a minute."
+      );
       console.error("Failed to generate analysis:", error);
     }
   };
 
   const handleGenerateWeekly = async () => {
+    setActionError(null);
     try {
-      await generateWeekly.mutateAsync({});
+      await generateWeekly.mutateAsync({ language });
     } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      setActionError(
+        typeof detail === "string"
+          ? detail
+          : language === "uk"
+            ? "Не вдалося згенерувати тижневий аналіз. Спробуй ще раз за хвилину."
+            : "Failed to generate weekly review. Try again in a minute."
+      );
       console.error("Failed to generate weekly review:", error);
     }
   };
@@ -147,6 +192,12 @@ export default function InsightsPage() {
         </button>
       </div>
 
+      {actionError && (
+        <div className="card border border-[var(--accent-danger)]/40 bg-[var(--accent-danger-subtle)]">
+          <p className="text-sm text-[var(--text-primary)]">{actionError}</p>
+        </div>
+      )}
+
       {/* Empty state */}
       {insights.length === 0 && !selectedInsight && (
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-center space-y-6 animate-fade-in">
@@ -160,8 +211,8 @@ export default function InsightsPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <a href="/checkin" className="btn-fire px-6">{t.insights_do_checkin}</a>
-            <a href="/journal" className="btn-ghost px-6">{t.insights_write_journal}</a>
+            <Link href="/checkin" className="btn-fire px-6">{t.insights_do_checkin}</Link>
+            <Link href="/journal" className="btn-ghost px-6">{t.insights_write_journal}</Link>
           </div>
         </div>
       )}
@@ -192,7 +243,7 @@ export default function InsightsPage() {
       {/* Insights List */}
       {insights.length > 0 && !selectedInsight && (
         <div className="space-y-3">
-          {insights.map((insight: any, i: number) => (
+          {insights.map((insight, i) => (
             <div
               key={insight.id}
               onClick={() => setSelectedInsight(insight.id)}
@@ -258,11 +309,11 @@ export default function InsightsPage() {
           </div>
 
           {/* Full Analysis - The Deep Dive */}
-          {(selected as any).full_analysis && (
+          {selected.full_analysis && (
             <div className="card space-y-4">
               <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wide">{t.insights_deep_dive}</h3>
               <div className="text-sm text-[var(--text-secondary)] leading-relaxed space-y-4 whitespace-pre-wrap">
-                {renderWithLinks((selected as any).full_analysis)}
+                {renderWithLinks(selected.full_analysis)}
               </div>
             </div>
           )}
@@ -271,7 +322,7 @@ export default function InsightsPage() {
           {selected.insights && selected.insights.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wide">{t.insights_key_insights}</h3>
-              {selected.insights.map((ins: any, i: number) => (
+              {selected.insights.map((ins, i) => (
                 <div key={i} className={`card border-l-4 ${ins.type === "victory" ? "border-l-[var(--accent-success)]" :
                     ins.type === "warning" ? "border-l-[var(--accent-danger)]" :
                       ins.type === "pattern" ? "border-l-[var(--accent-fire)]" :
@@ -294,7 +345,7 @@ export default function InsightsPage() {
           {selected.trigger_patterns && selected.trigger_patterns.length > 0 && (
             <div className="card">
               <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wide mb-3">{t.insights_trigger_patterns}</h3>
-              {selected.trigger_patterns.map((tp: any, i: number) => (
+              {selected.trigger_patterns.map((tp, i) => (
                 <div key={i} className="flex items-center gap-3 py-2 border-b border-[var(--border-default)] last:border-0">
                   <AlertTriangle className="w-4 h-4 text-[var(--accent-warning)]" />
                   <div className="flex-1">
@@ -310,7 +361,7 @@ export default function InsightsPage() {
           {selected.recommendations && selected.recommendations.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wide">{t.insights_recommendations}</h3>
-              {selected.recommendations.map((rec: any, i: number) => (
+              {selected.recommendations.map((rec, i) => (
                 <div key={i} className="card bg-[var(--accent-fire-subtle)] border-[rgba(255,77,0,0.2)]">
                   <div className="font-bold text-sm text-[var(--accent-fire)] mb-1">{rec.title}</div>
                   <p className="text-sm text-[var(--text-secondary)]">{renderWithLinks(rec.description)}</p>

@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from google import genai
 from google.genai import types
 from openai import AsyncOpenAI
+from postgrest.exceptions import APIError
 from supabase import AsyncClient
 
 from app.config import Settings
@@ -101,7 +102,89 @@ class AIAnalyzer:
             # Last resort: try loading up to the first closing brace at depth 0
             raise
 
-    async def analyze_daily(self, user_id: str, target_date: date | None = None) -> dict:
+    @staticmethod
+    def _normalize_language(profile: dict, preferred_language: str | None = None) -> str:
+        raw = preferred_language or profile.get("preferred_language") or profile.get("locale") or "uk"
+        lang = str(raw).strip().lower()
+        return "uk" if lang.startswith("uk") or lang.startswith("ua") else "en"
+
+    @staticmethod
+    def _language_label(lang: str) -> str:
+        return "Ukrainian" if lang == "uk" else "English"
+
+    @staticmethod
+    def _as_list(value) -> list:
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return list(value.values())
+        return []
+
+    @staticmethod
+    def _as_text(value, default: str = "") -> str:
+        if value is None:
+            return default
+        if isinstance(value, str):
+            return value
+        return json.dumps(value, ensure_ascii=False, default=str)
+
+    def _normalize_daily_analysis(self, analysis: dict) -> dict:
+        analysis = analysis or {}
+        analysis["title"] = self._as_text(analysis.get("title"), "Daily Analysis")
+        analysis["summary"] = self._as_text(analysis.get("summary"))
+        analysis["full_analysis"] = self._as_text(analysis.get("full_analysis"))
+        analysis["insights"] = self._as_list(analysis.get("insights"))
+        analysis["recommendations"] = self._as_list(analysis.get("recommendations"))
+        analysis["trigger_patterns"] = self._as_list(analysis.get("trigger_patterns"))
+        analysis["tomorrow_action"] = self._as_text(analysis.get("tomorrow_action"))
+        analysis["motivational_close"] = self._as_text(analysis.get("motivational_close"))
+        return analysis
+
+    def _normalize_weekly_analysis(self, analysis: dict) -> dict:
+        analysis = analysis or {}
+        analysis["title"] = self._as_text(analysis.get("title"), "Weekly Review")
+        analysis["summary"] = self._as_text(analysis.get("summary"))
+        analysis["full_analysis"] = self._as_text(analysis.get("full_analysis"))
+        analysis["strategic_adjustments"] = self._as_list(analysis.get("strategic_adjustments"))
+        analysis["systemic_weaknesses"] = self._as_list(analysis.get("systemic_weaknesses"))
+        analysis["next_week_objective"] = self._as_text(analysis.get("next_week_objective"))
+        analysis["commander_briefing"] = self._as_text(analysis.get("commander_briefing"))
+        return analysis
+
+    async def _insert_ai_analysis(self, row: dict):
+        """Insert analysis rows across current and older Supabase schemas."""
+        attempts = [row]
+        no_action_columns = {
+            k: v for k, v in row.items()
+            if k not in {"tomorrow_action", "motivational_close"}
+        }
+        attempts.append(no_action_columns)
+
+        legacy_row = {
+            k: v for k, v in no_action_columns.items()
+            if k not in {"analysis_type", "insights", "recommendations", "trigger_patterns", "confidence_score"}
+        }
+        if "analysis_type" in row:
+            legacy_row["type"] = row["analysis_type"]
+        attempts.append(legacy_row)
+
+        last_error = None
+        for attempt in attempts:
+            try:
+                return await self.db.table("ai_analyses").insert(attempt).execute()
+            except APIError as err:
+                last_error = err
+                message = str(err).lower()
+                if "schema cache" not in message and "could not find" not in message:
+                    raise
+        raise last_error
+
+    async def analyze_daily(
+        self,
+        user_id: str,
+        target_date: date | None = None,
+        preferred_language: str | None = None,
+    ) -> dict:
         """
         Perform a comprehensive daily analysis.
         Gathers all data → RAG retrieval → Gemini analysis → store result.
@@ -114,6 +197,7 @@ class AIAnalyzer:
 
         # 1. Gather user data
         profile = await self._get_profile(user_id)
+        response_language = self._language_label(self._normalize_language(profile, preferred_language))
         checkins = await self._get_checkins(user_id, date_str)
         journals = await self._get_journals(user_id, date_str)
         habits = await self._get_active_habits(user_id)
@@ -148,6 +232,7 @@ class AIAnalyzer:
             display_name=profile.get("display_name", "Warrior"),
             identity_statement=profile.get("current_identity_statement", "Not set yet"),
             member_since=profile.get("created_at", "Unknown"),
+            preferred_language=response_language,
             date=date_str,
             checkins_data=json.dumps(checkins, indent=2, default=str),
             journal_data=json.dumps(journals, indent=2, default=str),
@@ -160,32 +245,32 @@ class AIAnalyzer:
         # 5. Generate analysis
         print("[AI] Calling Gemini for daily analysis...")
         analysis = await self._generate(prompt, temperature=0.9)
+        analysis = self._normalize_daily_analysis(analysis)
         print(f"[AI] Analysis generated: {analysis.get('title', 'Untitled')}")
 
+        severity_values = [
+            item.get("severity", 5)
+            for item in analysis.get("insights", [])
+            if isinstance(item, dict)
+        ]
+
         # 6. Store in database
-        stored = await (
-            self.db.table("ai_analyses")
-            .insert({
-                "user_id": user_id,
-                "analysis_type": "daily_review",
-                "title": analysis.get("title", f"Daily Analysis — {date_str}"),
-                "summary": analysis.get("summary", ""),
-                "full_analysis": analysis.get("full_analysis", ""),
-                "insights": analysis.get("insights"),
-                "recommendations": analysis.get("recommendations"),
-                "trigger_patterns": analysis.get("trigger_patterns"),
-                "tomorrow_action": analysis.get("tomorrow_action", ""),
-                "motivational_close": analysis.get("motivational_close", ""),
-                "severity_score": max(
-                    (i.get("severity", 5) for i in analysis.get("insights", [{"severity": 5}])),
-                    default=5,
-                ),
-                "confidence_score": 0.85,
-                "period_start": date_str,
-                "period_end": date_str,
-            })
-            .execute()
-        )
+        stored = await self._insert_ai_analysis({
+            "user_id": user_id,
+            "analysis_type": "daily_review",
+            "title": analysis.get("title", f"Daily Analysis — {date_str}"),
+            "summary": analysis.get("summary", ""),
+            "full_analysis": analysis.get("full_analysis", ""),
+            "insights": analysis.get("insights"),
+            "recommendations": analysis.get("recommendations"),
+            "trigger_patterns": analysis.get("trigger_patterns"),
+            "tomorrow_action": analysis.get("tomorrow_action", ""),
+            "motivational_close": analysis.get("motivational_close", ""),
+            "severity_score": max(severity_values, default=5),
+            "confidence_score": 0.85,
+            "period_start": date_str,
+            "period_end": date_str,
+        })
         print(f"[AI] Analysis stored in DB: {stored.data[0]['id']}")
 
         # 7. Embed the analysis summary for future RAG (non-critical)
@@ -280,7 +365,7 @@ class AIAnalyzer:
 
         return chapter
 
-    async def analyze_weekly(self, user_id: str) -> dict:
+    async def analyze_weekly(self, user_id: str, preferred_language: str | None = None) -> dict:
         """
         Perform a strategic weekly review.
         Aggregates last 7 days of daily insights + stats + themes.
@@ -294,18 +379,32 @@ class AIAnalyzer:
 
         # 1. Gather data
         profile = await self._get_profile(user_id)
+        response_language = self._language_label(self._normalize_language(profile, preferred_language))
         habits = await self._get_active_habits(user_id)
         
         # Get daily insights from the week
-        daily_insights_resp = await (
-            self.db.table("ai_analyses")
-            .select("title, summary, created_at")
-            .eq("user_id", user_id)
-            .eq("analysis_type", "daily_review")
-            .gte("created_at", f"{period_start}T00:00:00")
-            .lte("created_at", f"{period_end}T23:59:59")
-            .execute()
-        )
+        try:
+            daily_insights_resp = await (
+                self.db.table("ai_analyses")
+                .select("title, summary, created_at")
+                .eq("user_id", user_id)
+                .eq("analysis_type", "daily_review")
+                .gte("created_at", f"{period_start}T00:00:00")
+                .lte("created_at", f"{period_end}T23:59:59")
+                .execute()
+            )
+        except APIError as err:
+            if "analysis_type" not in str(err):
+                raise
+            daily_insights_resp = await (
+                self.db.table("ai_analyses")
+                .select("title, summary, created_at")
+                .eq("user_id", user_id)
+                .eq("type", "daily_review")
+                .gte("created_at", f"{period_start}T00:00:00")
+                .lte("created_at", f"{period_end}T23:59:59")
+                .execute()
+            )
         daily_summary = "\n".join([f"- {i['created_at'][:10]}: {i['title']} - {i['summary']}" for i in daily_insights_resp.data])
 
         # Get stats summary
@@ -331,6 +430,7 @@ class AIAnalyzer:
         prompt = WEEKLY_ANALYSIS_PROMPT.format(
             display_name=profile.get("display_name", "Warrior"),
             identity_statement=profile.get("current_identity_statement", "Not set yet"),
+            preferred_language=response_language,
             period_start=period_start,
             period_end=period_end,
             daily_insights_summary=daily_summary or "No daily insights generated this week.",
@@ -343,28 +443,25 @@ class AIAnalyzer:
         # 3. Generate
         print("[AI] Calling Gemini for weekly review...")
         analysis = await self._generate(prompt, temperature=0.9)
+        analysis = self._normalize_weekly_analysis(analysis)
 
         # 4. Store
-        stored = await (
-            self.db.table("ai_analyses")
-            .insert({
-                "user_id": user_id,
-                "analysis_type": "weekly_review",
-                "title": analysis.get("title", f"Weekly Review: {period_start} to {period_end}"),
-                "summary": analysis.get("summary", ""),
-                "full_analysis": analysis.get("full_analysis", ""),
-                "insights": analysis.get("strategic_adjustments"),
-                "recommendations": analysis.get("strategic_adjustments"),
-                "trigger_patterns": analysis.get("systemic_weaknesses"),
-                "tomorrow_action": analysis.get("next_week_objective", ""),
-                "motivational_close": analysis.get("commander_briefing", ""),
-                "severity_score": 5,
-                "confidence_score": 0.85,
-                "period_start": period_start,
-                "period_end": period_end,
-            })
-            .execute()
-        )
+        stored = await self._insert_ai_analysis({
+            "user_id": user_id,
+            "analysis_type": "weekly_review",
+            "title": analysis.get("title", f"Weekly Review: {period_start} to {period_end}"),
+            "summary": analysis.get("summary", ""),
+            "full_analysis": analysis.get("full_analysis", ""),
+            "insights": analysis.get("strategic_adjustments"),
+            "recommendations": analysis.get("strategic_adjustments"),
+            "trigger_patterns": analysis.get("systemic_weaknesses"),
+            "tomorrow_action": analysis.get("next_week_objective", ""),
+            "motivational_close": analysis.get("commander_briefing", ""),
+            "severity_score": 5,
+            "confidence_score": 0.85,
+            "period_start": period_start,
+            "period_end": period_end,
+        })
         print(f"[AI] Weekly review stored: {stored.data[0]['id']}")
         return analysis
 

@@ -145,6 +145,8 @@ CREATE TABLE ai_analyses (
     insights JSONB,
     recommendations JSONB,
     trigger_patterns JSONB,
+    tomorrow_action TEXT,
+    motivational_close TEXT,
     hero_chapter_number INT,
     hero_narrative TEXT,
     catalyst_letter TEXT,

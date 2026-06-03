@@ -57,6 +57,7 @@ async def _try_openai_fallback(
 class AnalysisRequest(BaseModel):
     habit_id: Optional[UUID] = None
     date: Optional[date] = None
+    language: Optional[str] = None
 
 
 class InsightFeedback(BaseModel):
@@ -100,7 +101,7 @@ async def trigger_daily_analysis(
 
     try:
         result = await _run_with_retries(
-            lambda: analyzer.analyze_daily(str(user.id), target_date),
+            lambda: analyzer.analyze_daily(str(user.id), target_date, data.language),
             attempts=2,
             delay_seconds=1.5,
         )
@@ -108,7 +109,7 @@ async def trigger_daily_analysis(
         alt = await _try_openai_fallback(
             settings,
             admin_client,
-            lambda alt_analyzer: alt_analyzer.analyze_daily(str(user.id), target_date),
+            lambda alt_analyzer: alt_analyzer.analyze_daily(str(user.id), target_date, data.language),
         )
         if alt:
             result = alt
@@ -138,7 +139,7 @@ async def trigger_weekly_analysis(
 
     try:
         result = await _run_with_retries(
-            lambda: analyzer.analyze_weekly(str(user.id)),
+            lambda: analyzer.analyze_weekly(str(user.id), data.language),
             attempts=2,
             delay_seconds=1.5,
         )
@@ -146,7 +147,7 @@ async def trigger_weekly_analysis(
         alt = await _try_openai_fallback(
             settings,
             admin_client,
-            lambda alt_analyzer: alt_analyzer.analyze_weekly(str(user.id)),
+            lambda alt_analyzer: alt_analyzer.analyze_weekly(str(user.id), data.language),
         )
         if alt:
             result = alt

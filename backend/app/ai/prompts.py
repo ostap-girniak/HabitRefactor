@@ -29,6 +29,7 @@ DAILY_ANALYSIS_PROMPT = """Analyze this warrior's day. Here is everything about 
 Name: {display_name}
 Identity Statement: {identity_statement}
 Active since: {member_since}
+Preferred response language: {preferred_language}
 
 ## TODAY'S DATA ({date})
 ### Check-ins:
@@ -52,6 +53,7 @@ Active since: {member_since}
 ---
 
 Generate a daily analysis as JSON with this schema. 
+CRITICAL LANGUAGE RULE: Every JSON string value MUST be written in {preferred_language}. Do not switch to English unless the preferred language is English.
 IMPORTANT: If "RELEVANT RESOURCES" are provided in the Wisdom & Science section, you MUST include them in the "recommendations" list with type "read", "watch", or "exercise" and provide the URL in the description.
 
 {
@@ -232,6 +234,7 @@ Analyze the trends, the shifts in identity, and the systemic weaknesses discover
 ## THE WARRIOR
 Name: {display_name}
 Identity Statement: {identity_statement}
+Preferred response language: {preferred_language}
 
 ## DATA FROM THE LAST 7 DAYS ({period_start} to {period_end})
 ### Daily AI Insights Summary:
@@ -252,6 +255,7 @@ Identity Statement: {identity_statement}
 ---
 
 Generate a strategic weekly review as JSON:
+CRITICAL LANGUAGE RULE: Every JSON string value MUST be written in {preferred_language}. Do not switch to English unless the preferred language is English.
 {{
     "title": "A powerful, defining title for this week's review",
     "summary": "High-level executive summary of the week's performance (3-4 sentences)",
