@@ -6,7 +6,7 @@
 -- ============================================
 
 ALTER TABLE IF EXISTS public.ai_analyses
-  ADD COLUMN IF NOT EXISTS analysis_type analysis_type,
+  ADD COLUMN IF NOT EXISTS analysis_type public.analysis_type,
   ADD COLUMN IF NOT EXISTS insights JSONB,
   ADD COLUMN IF NOT EXISTS recommendations JSONB,
   ADD COLUMN IF NOT EXISTS trigger_patterns JSONB,
@@ -26,14 +26,20 @@ BEGIN
       AND table_name = 'ai_analyses'
       AND column_name = 'type'
   ) THEN
-    UPDATE public.ai_analyses
-    SET analysis_type = COALESCE(analysis_type, "type")
-    WHERE analysis_type IS NULL;
+    UPDATE public.ai_analyses AS analyses
+    SET analysis_type = analyses."type"::text::public.analysis_type
+    WHERE analyses.analysis_type IS NULL
+      AND analyses."type" IS NOT NULL
+      AND analyses."type"::text IN (
+        SELECT enumlabel
+        FROM pg_enum
+        WHERE enumtypid = 'public.analysis_type'::regtype
+      );
   END IF;
 END $$;
 
 UPDATE public.ai_analyses
-SET analysis_type = 'daily_review'
+SET analysis_type = 'daily_review'::public.analysis_type
 WHERE analysis_type IS NULL;
 
 ALTER TABLE IF EXISTS public.ai_analyses
