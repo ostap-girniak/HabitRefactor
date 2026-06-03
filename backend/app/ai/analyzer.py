@@ -3,6 +3,7 @@ Catalyst Forge — AI Analyzer Engine
 The heart of the system. Generates daily/weekly analyses using Gemini + RAG.
 """
 import json
+import re
 from datetime import date, timedelta
 from google import genai
 from google.genai import types
@@ -128,6 +129,35 @@ class AIAnalyzer:
             return value
         return json.dumps(value, ensure_ascii=False, default=str)
 
+    @staticmethod
+    def _as_score(value, default: int = 5) -> int:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float)):
+            score = int(round(value))
+        else:
+            text = str(value).strip().lower()
+            named_scores = {
+                "critical": 10,
+                "severe": 9,
+                "high": 8,
+                "medium": 5,
+                "moderate": 5,
+                "low": 3,
+                "minor": 2,
+            }
+            if text in named_scores:
+                score = named_scores[text]
+            else:
+                digits = "".join(ch if ch.isdigit() or ch == "." else " " for ch in text).split()
+                try:
+                    score = int(round(float(digits[0]))) if digits else default
+                except (TypeError, ValueError):
+                    score = default
+        return max(1, min(10, score))
+
     def _normalize_daily_analysis(self, analysis: dict) -> dict:
         analysis = analysis or {}
         analysis["title"] = self._as_text(analysis.get("title"), "Daily Analysis")
@@ -170,13 +200,24 @@ class AIAnalyzer:
 
         last_error = None
         for attempt in attempts:
+            pending = dict(attempt)
             try:
-                return await self.db.table("ai_analyses").insert(attempt).execute()
+                return await self.db.table("ai_analyses").insert(pending).execute()
             except APIError as err:
                 last_error = err
                 message = str(err).lower()
-                if "schema cache" not in message and "could not find" not in message:
-                    raise
+                if "schema cache" in message or "could not find" in message:
+                    missing_match = re.search(r"'([^']+)' column", str(err))
+                    missing_column = missing_match.group(1) if missing_match else None
+                    if missing_column and missing_column in pending:
+                        pending.pop(missing_column, None)
+                        try:
+                            return await self.db.table("ai_analyses").insert(pending).execute()
+                        except APIError as retry_err:
+                            last_error = retry_err
+                            continue
+                    continue
+                raise
         raise last_error
 
     async def analyze_daily(
@@ -249,7 +290,7 @@ class AIAnalyzer:
         print(f"[AI] Analysis generated: {analysis.get('title', 'Untitled')}")
 
         severity_values = [
-            item.get("severity", 5)
+            self._as_score(item.get("severity", 5))
             for item in analysis.get("insights", [])
             if isinstance(item, dict)
         ]
