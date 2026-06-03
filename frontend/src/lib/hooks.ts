@@ -19,11 +19,38 @@ type HabitsResponse = {
 };
 
 type OracleSessionsResponse = {
-  sessions?: unknown[];
+  sessions?: OracleSession[];
+};
+
+type OracleResource = {
+  type: "book" | "video" | "article" | "specialist";
+  title: string;
+  author?: string;
+  url?: string | null;
+  reason: string;
+};
+
+type OracleChatMessage = {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  metadata?: {
+    suggested_actions?: { title: string; action: string }[];
+    mood_detected?: string;
+    threat_level?: number;
+    resources?: OracleResource[];
+    suggest_professional_help?: boolean;
+  };
+};
+
+type OracleSession = {
+  session_id: string;
+  title: string;
+  created_at: string;
 };
 
 type OracleHistoryResponse = {
-  history?: unknown[];
+  history?: OracleChatMessage[];
 };
 
 // ============================================

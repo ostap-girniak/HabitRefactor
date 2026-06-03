@@ -451,7 +451,7 @@ export default function JournalPage() {
                           </span>
                           {(entry.media_duration_seconds || 0) > 0 && (
                             <span className="text-xs text-[var(--text-muted)]">
-                              • {formatTime(entry.media_duration_seconds)}
+                              • {formatTime(entry.media_duration_seconds ?? 0)}
                             </span>
                           )}
                           <span className="badge badge-success text-[10px]">

@@ -8,6 +8,7 @@ import {
   useNotificationHistory,
 } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
+import { useUIStore } from "@/lib/store";
 
 type NotificationMetadata = {
   journal_entry_id?: string;
@@ -51,7 +52,8 @@ function typeLabel(type: string, isUk: boolean) {
 
 export default function JournalNotificationsPage() {
   const t = useT();
-  const isUk = t.oracle_locale === "uk";
+  const language = useUIStore((state) => state.language);
+  const isUk = language === "uk";
   const locale = isUk ? "uk-UA" : "en-US";
   const { data, isLoading } = useNotificationHistory(100);
   const markRead = useMarkNotificationRead();
@@ -97,7 +99,9 @@ export default function JournalNotificationsPage() {
       ) : notifications.length === 0 ? (
         <div className="card text-center py-12">
           <Bell className="w-10 h-10 mx-auto text-[var(--text-muted)] opacity-50 mb-3" />
-          <p className="text-sm text-[var(--text-muted)]">{t.notifications_empty}</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            {t.notifications_empty}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -106,6 +110,7 @@ export default function JournalNotificationsPage() {
             const journalEntryId = metadata.journal_entry_id;
             const themes = metadata.key_themes || [];
             const emotions = metadata.detected_emotions || {};
+
             return (
               <div
                 key={notification.id}
