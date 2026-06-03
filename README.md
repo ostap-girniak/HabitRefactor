@@ -234,14 +234,15 @@ Run SQL scripts from `/database/` in the **Supabase SQL Editor** in this order:
 | `008_notification_history.sql` | Notification history |
 | `009_oracle_chat.sql` | Oracle chat tables |
 | `010_oracle_sessions.sql` | Oracle session management |
+| `012_identity_statement_affirmation.sql` | Identity daily affirmation schema fix |
 | `seed_knowledge_base.sql` | English knowledge base (33 entries) |
 | `011_ukrainian_knowledge_base.sql` | Ukrainian knowledge base (26 entries) |
 
 **Do NOT also run** `001_extensions.sql` … `006_functions.sql` if you already ran `migration.sql` — those files are the same schema split into parts. Running both causes duplicate-type / duplicate-table errors.
 
 **Fresh DB vs existing DB:**
-- **New project:** run `migration.sql` once, then `007` → `010`, then both seed files.
-- **Already ran an older `migration.sql`:** still run `007`–`010` (they use `IF NOT EXISTS` / safe alters). Re-running `migration.sql` on a populated DB may error on types that already exist.
+- **New project:** run `migration.sql` once, then `007` → `010`, then `012`, then both seed files.
+- **Already ran an older `migration.sql`:** still run `007`–`010` and `012` (they use `IF NOT EXISTS` / safe alters). Re-running `migration.sql` on a populated DB may error on types that already exist.
 
 **Oracle / chat will not work** without `009_oracle_chat.sql` and `010_oracle_sessions.sql` — they are not inside `migration.sql`.
 
@@ -289,8 +290,8 @@ Invoke-WebRequest -Method POST -Uri "http://127.0.0.1:8000/api/v1/ai/embed-knowl
 |---------|----------------|-----|
 | Oracle gives generic answers, no book links | No embeddings | Run seeds + `POST /api/v1/ai/embed-knowledge-base` |
 | `extension "vector" does not exist` | pgvector not enabled | `migration.sql` creates it; on hosted Supabase it should work — re-run extensions block |
-| SQL errors on re-run | Duplicate migration | Don't re-run `migration.sql` on existing DB; use only `007`–`011` |
-| Duplicate enum/type errors | Ran `001`–`006` after `migration.sql` | Use only `migration.sql` + `007`–`011` |
+| SQL errors on re-run | Duplicate migration | Don't re-run `migration.sql` on existing DB; use only `007`–`012` |
+| Duplicate enum/type errors | Ran `001`–`006` after `migration.sql` | Use only `migration.sql` + `007`–`012` |
 
 ### AI (Gemini)
 

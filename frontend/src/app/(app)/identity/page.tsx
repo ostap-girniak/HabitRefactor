@@ -89,18 +89,26 @@ export default function IdentityPage() {
   const handleCreateStatement = async () => {
     if (!oldIdentity.trim() || !newIdentity.trim()) return;
     setActionError(null);
+    const payload: Record<string, string> = {
+      old_identity: oldIdentity.trim(),
+      new_identity: newIdentity.trim(),
+    };
+    if (dailyAffirmation.trim()) {
+      payload.daily_affirmation = dailyAffirmation.trim();
+    }
     try {
-      await createStatement.mutateAsync({
-        old_identity: oldIdentity.trim(),
-        new_identity: newIdentity.trim(),
-        daily_affirmation: dailyAffirmation.trim(),
-      });
+      await createStatement.mutateAsync(payload);
       setOldIdentity("");
       setNewIdentity("");
       setDailyAffirmation("");
       setShowForm(false);
     } catch (error) {
-      setActionError("Failed to create identity. If this keeps happening, backend/database schema might be outdated.");
+      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      setActionError(
+        typeof detail === "string"
+          ? detail
+          : "Failed to create identity. Run database/012_identity_statement_affirmation.sql in Supabase, then retry."
+      );
       console.error("Failed to create identity statement:", error);
     }
   };
@@ -239,7 +247,7 @@ export default function IdentityPage() {
           <div className="flex gap-3">
             <button
               onClick={handleCreateStatement}
-              disabled={createStatement.isPending || !oldIdentity.trim() || !newIdentity.trim() || !dailyAffirmation.trim()}
+              disabled={createStatement.isPending || !oldIdentity.trim() || !newIdentity.trim()}
               className="btn-fire flex-1 disabled:opacity-50"
             >
               {createStatement.isPending ? t.identity_forging : t.identity_forge_cta}

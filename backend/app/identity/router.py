@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from supabase import AsyncClient
 from postgrest.exceptions import APIError
 
@@ -14,13 +14,23 @@ from app.dependencies import get_current_user, get_authenticated_client
 router = APIRouter()
 
 def _is_missing_column_error(error: Exception, column_name: str) -> bool:
-    return column_name in str(error) and "schema cache" in str(error).lower()
+    message = str(error).lower()
+    return column_name.lower() in message and (
+        "schema cache" in message or "could not find" in message
+    )
 
 
 class IdentityCreate(BaseModel):
     old_identity: str = Field(..., min_length=5, max_length=500)
     new_identity: str = Field(..., min_length=5, max_length=500)
     daily_affirmation: Optional[str] = Field(None, min_length=5, max_length=500)
+
+    @field_validator("daily_affirmation", mode="before")
+    @classmethod
+    def blank_affirmation_is_optional(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class IdentityUpdate(BaseModel):
@@ -74,7 +84,6 @@ async def create_statement(
     stmt_data = {
         **data.model_dump(exclude_none=True),
         "daily_affirmation": daily_affirmation,
-        "proof_points": [],
         "user_id": str(user.id),
     }
     try:
@@ -87,12 +96,15 @@ async def create_statement(
         else:
             raise
     # Keep current identity in profile for AI prompts and dashboard context
-    await (
-        client.table("profiles")
-        .update({"current_identity_statement": data.new_identity})
-        .eq("id", str(user.id))
-        .execute()
-    )
+    try:
+        await (
+            client.table("profiles")
+            .update({"current_identity_statement": data.new_identity})
+            .eq("id", str(user.id))
+            .execute()
+        )
+    except Exception as err:
+        print(f"[WARN] Failed to sync profile identity after creating statement: {err}")
     return response.data[0]
 
 
