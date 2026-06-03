@@ -111,7 +111,9 @@ class AIAnalyzer:
 
     @staticmethod
     def _language_label(lang: str) -> str:
-        return "Ukrainian" if lang == "uk" else "English"
+        if lang == "uk":
+            return "Ukrainian. Write entirely in Ukrainian Cyrillic. Do not use English for titles, summaries, analysis, recommendations, or briefings."
+        return "English"
 
     @staticmethod
     def _as_list(value) -> list:
