@@ -14,6 +14,18 @@ import {
 import { useUserStore, useHabitStore } from "./store";
 import type { Habit, UserProfile } from "./store";
 
+type HabitsResponse = {
+  habits?: Habit[];
+};
+
+type OracleSessionsResponse = {
+  sessions?: unknown[];
+};
+
+type OracleHistoryResponse = {
+  history?: unknown[];
+};
+
 // ============================================
 // Auth Hooks
 // ============================================
@@ -54,7 +66,7 @@ export function useHabits() {
     queryKey: ["habits"],
     queryFn: async () => {
       const { data } = await habitsApi.list();
-      const habits = (data as any).habits as Habit[];
+      const habits = (data as HabitsResponse).habits || [];
       setHabits(habits);
       return habits;
     },
@@ -221,6 +233,8 @@ export function useCreateJournalEntry() {
     mutationFn: (data: Record<string, unknown>) => journalApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["journal"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
 }
@@ -305,7 +319,7 @@ export function useOracleSessions() {
     queryKey: ["ai", "oracle", "sessions"],
     queryFn: async () => {
       const { data } = await aiApi.getOracleSessions();
-      return (data as any).sessions || [];
+      return (data as OracleSessionsResponse).sessions || [];
     },
   });
 }
@@ -315,7 +329,7 @@ export function useOracleHistory(sessionId?: string | null, limit?: number) {
     queryKey: ["ai", "oracle", "history", sessionId, limit],
     queryFn: async () => {
       const { data } = await aiApi.getOracleHistory(limit, sessionId ?? undefined);
-      return (data as any).history || [];
+      return (data as OracleHistoryResponse).history || [];
     },
     enabled: !!sessionId,
   });
@@ -327,7 +341,7 @@ export function useOracleChat() {
   return useMutation({
     mutationFn: (data: { message: string; include_history?: boolean; session_id?: string }) =>
       aiApi.oracleChat(data),
-    onSuccess: (_res, _vars) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai", "oracle", "history"] });
       queryClient.invalidateQueries({ queryKey: ["ai", "oracle", "sessions"] });
     },

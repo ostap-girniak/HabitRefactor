@@ -4,9 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Mic,
-  MicOff,
   Video,
-  VideoOff,
   Square,
   Send,
   Clock,
@@ -16,12 +14,44 @@ import {
   Filter,
   SortDesc,
   SortAsc,
+  Bell,
 } from "lucide-react";
 import { useJournalEntries, useCreateJournalEntry, useUploadJournalMedia, useHabits } from "@/lib/hooks";
 import { journalApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
 type RecordingMode = "audio" | "video" | "text";
+
+type HabitOption = {
+  id: string;
+  name: string;
+};
+
+type JournalEntry = {
+  id: string;
+  title?: string;
+  entry_type: "audio" | "video" | "text";
+  raw_text?: string;
+  transcript?: string;
+  media_duration_seconds?: number;
+  transcription_status?: string;
+  created_at: string;
+  detected_emotions?: Record<string, number>;
+};
+
+type JournalEntriesResponse = {
+  entries?: JournalEntry[];
+};
+
+type UploadResponse = {
+  data?: { media_url?: string };
+  media_url?: string;
+};
+
+type ApiError = {
+  response?: { data?: { detail?: string } };
+  message?: string;
+};
 
 export default function JournalPage() {
   const t = useT();
@@ -36,7 +66,7 @@ export default function JournalPage() {
   const createEntry = useCreateJournalEntry();
   const uploadMedia = useUploadJournalMedia();
 
-  const entries = (entriesData as any)?.entries || [];
+  const entries = (entriesData as JournalEntriesResponse | undefined)?.entries || [];
 
   const [mode, setMode] = useState<RecordingMode | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -44,13 +74,6 @@ export default function JournalPage() {
   const [textEntry, setTextEntry] = useState("");
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [selectedHabitId, setSelectedHabitId] = useState<string>("none");
-
-  // Sync selected habit with filter if filter is active
-  useEffect(() => {
-    if (filterHabitId !== "all") {
-      setSelectedHabitId(filterHabitId);
-    }
-  }, [filterHabitId]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -157,7 +180,7 @@ export default function JournalPage() {
         // Then create entry referencing media
         await createEntry.mutateAsync({
           entry_type: mode,
-          media_url: (uploadRes as any)?.data?.media_url || (uploadRes as any)?.media_url || "",
+          media_url: (uploadRes as UploadResponse)?.data?.media_url || (uploadRes as UploadResponse)?.media_url || "",
           media_duration_seconds: recordingTime,
           media_size_bytes: file.size,
           habit_id: selectedHabitId === "none" ? undefined : selectedHabitId,
@@ -166,9 +189,10 @@ export default function JournalPage() {
       discardRecording();
       setTextEntry("");
       setMode(null);
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as ApiError;
       console.error("Failed to save journal:", error);
-      alert(`Error saving journal entry: ${error.response?.data?.detail || error.message}`);
+      alert(`Error saving journal entry: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -188,11 +212,17 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.journal_title}</h1>
-        <p className="text-[var(--text-secondary)] text-sm mt-1">
-          {t.journal_subtitle}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-[var(--text-primary)]">{t.journal_title}</h1>
+          <p className="text-[var(--text-secondary)] text-sm mt-1">
+            {t.journal_subtitle}
+          </p>
+        </div>
+        <Link href="/journal/notifications" className="btn-ghost flex items-center gap-2 text-sm">
+          <Bell className="w-4 h-4" />
+          {t.journal_notifications_cta}
+        </Link>
       </div>
 
       {/* Habit Selection (Target) */}
@@ -212,7 +242,7 @@ export default function JournalPage() {
                 className="w-full bg-transparent border-none text-sm font-bold text-[var(--text-primary)] focus:outline-none cursor-pointer"
               >
                 <option value="none" className="bg-[#121212]">{t.journal_general_entry}</option>
-                {(habits as any[]).map((h: any) => (
+                {(habits as HabitOption[]).map((h) => (
                   <option key={h.id} value={h.id} className="bg-[#121212]">
                     {h.name}
                   </option>
@@ -351,11 +381,17 @@ export default function JournalPage() {
           </div>
           <select
             value={filterHabitId}
-            onChange={(e) => setFilterHabitId(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setFilterHabitId(value);
+              if (value !== "all") {
+                setSelectedHabitId(value);
+              }
+            }}
             className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[var(--accent-fire)] transition-colors min-w-[160px] cursor-pointer"
           >
             <option value="all">{t.journal_all_habits}</option>
-            {(habits as any[]).map((h: any) => (
+            {(habits as HabitOption[]).map((h) => (
               <option key={h.id} value={h.id}>
                 {h.name}
               </option>
@@ -388,7 +424,7 @@ export default function JournalPage() {
               {t.journal_empty}
             </div>
           ) : (
-            (entries as any[]).map((entry: any, i: number) => (
+            entries.map((entry, i) => (
               <div
                 key={entry.id}
                 className="relative group animate-slide-up"

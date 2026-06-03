@@ -16,6 +16,8 @@ from pydantic import BaseModel
 from supabase import AsyncClient
 
 from app.config import Settings
+from app.notifications.push import send_web_push, save_notification_to_history
+from app.notifications import templates as nt
 
 # --- Lazy initialization and ffmpeg hooking ---
 _WHISPER_MODEL = None
@@ -265,6 +267,7 @@ Return a JSON object with strictly these keys:
             
             # 6. Final DB Update (AI results)
             await finish_db_update(db_client, entry_id, transcript_result)
+            await notify_journal_analysis_complete(settings, db_client, entry_id, transcript_result)
             return transcript_result
 
         except Exception as ai_err:
@@ -323,3 +326,95 @@ async def finish_db_update(db_client, entry_id, transcript_result: TranscriptRes
         .execute()
     )
     print(f"[AI] Database updated for entry {entry_id} with completed transcript.")
+
+
+async def notify_journal_analysis_complete(
+    settings: Settings,
+    db_client,
+    entry_id: str,
+    transcript_result: TranscriptResult,
+) -> None:
+    """Save/send a journal-analysis notification after semantic extraction completes."""
+    try:
+        entry_resp = await (
+            db_client.table("journal_entries")
+            .select("user_id, mood_rating")
+            .eq("id", entry_id)
+            .single()
+            .execute()
+        )
+        entry = entry_resp.data or {}
+        user_id = entry.get("user_id")
+        if not user_id:
+            return
+
+        user_lang = await nt.get_user_lang(db_client, str(user_id))
+        themes = transcript_result.key_themes or []
+        mood = entry.get("mood_rating")
+        intense = (transcript_result.emotional_intensity or 0) >= 8
+        danger_emotions = transcript_result.detected_emotions or {}
+        is_danger = bool(
+            (mood is not None and mood <= 3)
+            or intense
+            or danger_emotions.get("shame", 0) >= 0.55
+            or danger_emotions.get("sadness", 0) >= 0.65
+            or danger_emotions.get("anger", 0) >= 0.65
+        )
+
+        if is_danger:
+            snippet = (transcript_result.summary or transcript_result.transcript or "")[:90]
+            title, body = nt.pick_journal_danger(user_lang, snippet=snippet)
+            notification_type = "journal_analysis_warning"
+            tag = "journal-analysis-warning"
+        else:
+            title, body = nt.pick_journal_motivation(user_lang, themes=themes)
+            notification_type = "journal_analysis"
+            tag = "journal-analysis"
+
+        url = "/journal/notifications"
+        metadata = {
+            "journal_entry_id": entry_id,
+            "key_themes": themes,
+            "summary": transcript_result.summary,
+            "emotional_intensity": transcript_result.emotional_intensity,
+            "detected_emotions": transcript_result.detected_emotions,
+            "is_danger": is_danger,
+        }
+
+        await save_notification_to_history(
+            client=db_client,
+            user_id=str(user_id),
+            title=title,
+            body=body,
+            notification_type=notification_type,
+            url=url,
+            metadata=metadata,
+        )
+
+        subs_resp = await (
+            db_client.table("push_subscriptions")
+            .select("endpoint, p256dh_key, auth_key, keys, is_active")
+            .eq("user_id", str(user_id))
+            .limit(20)
+            .execute()
+        )
+        for sub in subs_resp.data or []:
+            if sub.get("is_active") is False:
+                continue
+            err = await send_web_push(
+                settings=settings,
+                subscription=sub,
+                title=title,
+                body=body,
+                url=url,
+                tag=tag,
+            )
+            if err == "subscription_gone":
+                await (
+                    db_client.table("push_subscriptions")
+                    .update({"is_active": False})
+                    .eq("endpoint", sub.get("endpoint"))
+                    .execute()
+                )
+    except Exception as e:
+        print(f"[WARN] Failed to notify journal analysis completion: {e}")

@@ -27,6 +27,11 @@ const translations = {
     notifications_min_ago: "{n}m ago",
     notifications_hour_ago: "{n}h ago",
     notifications_day_ago: "{n}d ago",
+    notifications_open_history: "Open history",
+    notifications_history_title: "Notification History",
+    notifications_history_subtitle: "Every alert, journal analysis, and warning in one place.",
+    notifications_back_to_journal: "Back to Journal",
+    notifications_open_journal_entry: "Open journal entry",
 
     // Common
     loading: "Loading...",
@@ -190,6 +195,7 @@ const translations = {
     journal_previous_entries: "Previous Entries",
     journal_empty: "No journal entries yet. Speak your mind.",
     journal_delete_confirm: "Delete this entry?",
+    journal_notifications_cta: "Notification history",
 
     // AI Insights
     insights_title: "AI Insights 🧠",
@@ -628,6 +634,11 @@ const translations = {
     notifications_min_ago: "{n} хв тому",
     notifications_hour_ago: "{n} год тому",
     notifications_day_ago: "{n} д тому",
+    notifications_open_history: "Відкрити історію",
+    notifications_history_title: "Історія сповіщень",
+    notifications_history_subtitle: "Усі сигнали, аналізи журналу й попередження в одному місці.",
+    notifications_back_to_journal: "Назад до Журналу",
+    notifications_open_journal_entry: "Відкрити запис журналу",
 
     // Common
     loading: "Завантаження...",
@@ -791,6 +802,7 @@ const translations = {
     journal_previous_entries: "Попередні записи",
     journal_empty: "Записів ще немає. Скажи що думаєш.",
     journal_delete_confirm: "Видалити цей запис?",
+    journal_notifications_cta: "Історія сповіщень",
 
     // AI Insights
     insights_title: "AI Аналіз 🧠",

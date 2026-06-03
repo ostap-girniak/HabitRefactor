@@ -13,6 +13,8 @@ from enum import Enum
 from app.dependencies import get_current_user, get_authenticated_client, get_supabase_admin
 from app.config import get_settings, Settings
 from app.journal.transcription import transcribe_with_gemini
+from app.notifications.push import save_notification_to_history
+from app.notifications import templates as nt
 
 router = APIRouter()
 
@@ -138,6 +140,26 @@ async def create_journal_entry(
         err_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
         print(f"DATABASE INSERT ERROR: {err_msg}")
         raise HTTPException(status_code=500, detail=f"DB Error: {str(e)}")
+
+    try:
+        user_lang = await nt.get_user_lang(admin_client, str(user.id))
+        if user_lang == "uk":
+            title = "Журнал прийнято — аналізуємо"
+            body = "AI розбирає емоції, теми й сигнали з твого запису."
+        else:
+            title = "Journal received — analyzing"
+            body = "AI is reading the emotions, themes, and signals in your entry."
+        await save_notification_to_history(
+            client=admin_client,
+            user_id=str(user.id),
+            title=title,
+            body=body,
+            notification_type="journal_processing",
+            url="/journal/notifications",
+            metadata={"journal_entry_id": str(response.data[0]["id"])},
+        )
+    except Exception as e:
+        print(f"[WARN] Failed to save journal processing notification: {e}")
 
     # Trigger async analysis for all types if content is available
     print(f"[DEBUG] Triggering AI check. Type={data.entry_type}, has_text={bool(data.raw_text)}")
