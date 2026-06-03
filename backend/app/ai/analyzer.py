@@ -112,7 +112,11 @@ class AIAnalyzer:
     @staticmethod
     def _language_label(lang: str) -> str:
         if lang == "uk":
-            return "Ukrainian. Write entirely in Ukrainian Cyrillic. Do not use English for titles, summaries, analysis, recommendations, or briefings."
+            return (
+                "Українська мова (Ukrainian, Cyrillic only). "
+                "Every title, summary, paragraph, recommendation, insight, pattern, action, and briefing MUST be written in Ukrainian Cyrillic. "
+                "English user-facing text is invalid."
+            )
         return "English"
 
     @staticmethod
@@ -159,6 +163,172 @@ class AIAnalyzer:
                 except (TypeError, ValueError):
                     score = default
         return max(1, min(10, score))
+
+    @staticmethod
+    def _is_latin_heavy(text: str) -> bool:
+        latin = len(re.findall(r"[A-Za-z]", text or ""))
+        cyrillic = len(re.findall(r"[А-Яа-яІіЇїЄєҐґ]", text or ""))
+        return latin >= 30 and latin > cyrillic * 2
+
+    def _needs_ukrainian_fallback(self, analysis: dict, lang: str) -> bool:
+        if lang != "uk":
+            return False
+        sample = " ".join(
+            self._as_text(analysis.get(key))
+            for key in ("title", "summary", "full_analysis", "tomorrow_action", "motivational_close")
+        )
+        return self._is_latin_heavy(sample)
+
+    def _build_daily_fallback_analysis(
+        self,
+        profile: dict,
+        checkins: list[dict],
+        journals: list[dict],
+        habits: list[dict],
+        date_str: str,
+        lang: str,
+        reason: str | None = None,
+    ) -> dict:
+        relapses = [c for c in checkins if c.get("result") == "relapse"]
+        victories = [c for c in checkins if c.get("result") == "success"]
+        partials = [c for c in checkins if c.get("result") == "partial"]
+        triggers = [c.get("relapse_trigger") for c in checkins if c.get("relapse_trigger")]
+        habit_names = [h.get("name", "habit") for h in habits]
+        journal_count = len(journals)
+        display_name = profile.get("display_name") or "Warrior"
+
+        if lang == "uk":
+            main_signal = (
+                "ризик зриву" if relapses else
+                "нестабільний день" if partials else
+                "день контролю" if victories else
+                "день для самоспостереження"
+            )
+            trigger_text = ", ".join(triggers) if triggers else "явних тригерів не зафіксовано"
+            habits_text = ", ".join(habit_names) if habit_names else "активних звичок не знайдено"
+            technical_note = f"\n\nТехнічна примітка: AI-провайдер не дав стабільну відповідь, тому створено локальний аналіз на основі твоїх даних. Причина: {reason[:160]}" if reason else ""
+            return {
+                "title": f"Щоденний аналіз: {main_signal}",
+                "summary": (
+                    f"{display_name}, сьогодні система бачить {len(victories)} перемог, "
+                    f"{len(partials)} часткових результатів і {len(relapses)} зривів. "
+                    f"Журналів за день: {journal_count}; ключовий сигнал: {trigger_text}."
+                ),
+                "full_analysis": (
+                    f"Дата: {date_str}.\n\n"
+                    f"Твої активні фронти: {habits_text}.\n\n"
+                    f"Головний патерн дня: {main_signal}. Якщо були зриви або часткові результати, це не вирок, а дані. "
+                    f"Дані показують, де саме система дала слабину, і завтра це місце треба закрити конкретною дією.\n\n"
+                    f"Тригери: {trigger_text}. Не сперечайся з тригером у моменті. Заздалегідь постав бар'єр: прибери стимул, зміни маршрут, "
+                    f"зроби паузу на 10 хвилин і переключи тіло на фізичну дію.\n\n"
+                    f"Твоя задача не виглядати сильним, а діяти як людина, яка будує силу через повторення. Один чесний день важить більше, ніж сто обіцянок."
+                    f"{technical_note}"
+                ),
+                "insights": [
+                    {
+                        "type": "pattern",
+                        "title": "Дані важливіші за настрій",
+                        "description": f"Сьогодні зафіксовано {len(checkins)} чекінів і {journal_count} записів журналу. Це вже матеріал для роботи, навіть якщо день був нерівний.",
+                        "severity": 5,
+                    },
+                    {
+                        "type": "warning" if relapses else "victory",
+                        "title": "Контроль будується до тригера",
+                        "description": f"Ключові тригери: {trigger_text}. Наступний крок — підготувати відповідь до того, як імпульс стане сильним.",
+                        "severity": 7 if relapses else 4,
+                    },
+                ],
+                "recommendations": [
+                    {
+                        "type": "action",
+                        "title": "10-хвилинний бар'єр",
+                        "description": "Коли з'явиться потяг до старої звички, постав таймер на 10 хвилин і зроби одну фізичну дію: душ, прогулянка, віджимання або вода. Не думай, рухайся.",
+                    }
+                ],
+                "trigger_patterns": [
+                    {
+                        "trigger": trigger_text,
+                        "frequency": "за сьогоднішніми записами",
+                        "correlation": "Тригер треба зустрічати не силою волі, а заготовленим сценарієм.",
+                    }
+                ],
+                "tomorrow_action": "Завтра перед першим ризиковим моментом зроби 10-хвилинний бар'єр і запиши результат у журнал.",
+                "motivational_close": "Ти не програєш, коли бачиш правду. Ти програєш, коли перестаєш діяти.",
+            }
+
+        trigger_text = ", ".join(triggers) if triggers else "no explicit triggers logged"
+        return {
+            "title": "Daily analysis: control checkpoint",
+            "summary": f"{display_name}, today shows {len(victories)} wins, {len(partials)} partials, and {len(relapses)} relapses. Journal entries: {journal_count}.",
+            "full_analysis": f"Date: {date_str}.\n\nTriggers: {trigger_text}. Use this as data, not judgment. Tomorrow, build one concrete barrier before the risky moment.",
+            "insights": [{"type": "pattern", "title": "Data beats mood", "description": "Your logs create a clearer system map.", "severity": 5}],
+            "recommendations": [{"type": "action", "title": "10-minute barrier", "description": "When an urge appears, delay for 10 minutes and move your body."}],
+            "trigger_patterns": [{"trigger": trigger_text, "frequency": "today", "correlation": "Prepare the response before the trigger hits."}],
+            "tomorrow_action": "Use a 10-minute barrier before the first risky moment.",
+            "motivational_close": "Truth plus action is how you rebuild.",
+        }
+
+    def _build_weekly_fallback_analysis(
+        self,
+        profile: dict,
+        habits: list[dict],
+        checkins: list[dict],
+        triggers: dict,
+        period_start: str,
+        period_end: str,
+        lang: str,
+        reason: str | None = None,
+    ) -> dict:
+        victories = len([c for c in checkins if c.get("result") == "success"])
+        relapses = len([c for c in checkins if c.get("result") == "relapse"])
+        trigger_text = ", ".join(f"{k}: {v}" for k, v in triggers.items()) if triggers else "явних тригерів не зафіксовано"
+        display_name = profile.get("display_name") or "Warrior"
+        habit_names = ", ".join(h.get("name", "звичка") for h in habits) if habits else "активних звичок не знайдено"
+
+        if lang == "uk":
+            technical_note = f"\n\nТехнічна примітка: AI повернув нестабільну або неукраїнську відповідь, тому створено локальний український огляд. Причина: {reason[:160]}" if reason else ""
+            return {
+                "title": "Тижневий огляд: система, а не хаос",
+                "summary": (
+                    f"{display_name}, за період {period_start} - {period_end} зафіксовано {victories} перемог і {relapses} зривів. "
+                    f"Головний фокус: {habit_names}. Найважливіші тригери: {trigger_text}."
+                ),
+                "full_analysis": (
+                    f"Цей тиждень показує не твою слабкість, а структуру твоїх ризиків.\n\n"
+                    f"Активні фронти: {habit_names}.\n\n"
+                    f"Перемоги: {victories}. Зриви: {relapses}. Тригери: {trigger_text}.\n\n"
+                    f"Твій наступний крок — не додавати ще більше цілей, а зробити одну систему захисту перед найчастішим тригером. "
+                    f"Сила тут не в емоційному ривку, а в повторюваній підготовці."
+                    f"{technical_note}"
+                ),
+                "strategic_adjustments": [
+                    {
+                        "type": "pattern",
+                        "title": "Одна система захисту",
+                        "description": "Обери найчастіший тригер тижня і постав перед ним конкретний бар'єр: таймер, зміна середовища, фізична дія або повідомлення людині підтримки.",
+                        "severity": 6,
+                    }
+                ],
+                "systemic_weaknesses": [
+                    {
+                        "trigger": trigger_text,
+                        "frequency": "за останні 7 днів",
+                        "correlation": "Ризик зростає там, де немає заздалегідь підготовленої відповіді.",
+                    }
+                ],
+                "next_week_objective": "Наступного тижня захисти один найчастіший тригер однією конкретною дією.",
+                "commander_briefing": "Менше обіцянок. Більше системи. Один бар'єр, повторений щодня.",
+            }
+
+        return {
+            "title": "Weekly review: system over chaos",
+            "summary": f"{display_name}, this week logged {victories} wins and {relapses} relapses. Main focus: {habit_names}.",
+            "full_analysis": f"Period: {period_start} - {period_end}. Triggers: {trigger_text}. Build one barrier before the most common trigger.",
+            "strategic_adjustments": [{"type": "pattern", "title": "One protection system", "description": "Protect the most common trigger with one concrete barrier.", "severity": 6}],
+            "systemic_weaknesses": [{"trigger": trigger_text, "frequency": "last 7 days", "correlation": "Risk rises where no prepared response exists."}],
+            "next_week_objective": "Protect one frequent trigger with one concrete action.",
+            "commander_briefing": "Less promising. More system.",
+        }
 
     def _normalize_daily_analysis(self, analysis: dict) -> dict:
         analysis = analysis or {}
@@ -240,7 +410,8 @@ class AIAnalyzer:
 
         # 1. Gather user data
         profile = await self._get_profile(user_id)
-        response_language = self._language_label(self._normalize_language(profile, preferred_language))
+        lang = self._normalize_language(profile, preferred_language)
+        response_language = self._language_label(lang)
         checkins = await self._get_checkins(user_id, date_str)
         journals = await self._get_journals(user_id, date_str)
         habits = await self._get_active_habits(user_id)
@@ -287,8 +458,22 @@ class AIAnalyzer:
 
         # 5. Generate analysis
         print("[AI] Calling Gemini for daily analysis...")
-        analysis = await self._generate(prompt, temperature=0.9)
-        analysis = self._normalize_daily_analysis(analysis)
+        try:
+            analysis = await self._generate(prompt, temperature=0.9)
+            analysis = self._normalize_daily_analysis(analysis)
+            if self._needs_ukrainian_fallback(analysis, lang):
+                raise ValueError("AI returned English text while Ukrainian was requested")
+        except Exception as err:
+            print(f"[AI] Daily AI generation failed; using local fallback: {err}")
+            analysis = self._build_daily_fallback_analysis(
+                profile=profile,
+                checkins=checkins,
+                journals=journals,
+                habits=habits,
+                date_str=date_str,
+                lang=lang,
+                reason=str(err),
+            )
         print(f"[AI] Analysis generated: {analysis.get('title', 'Untitled')}")
 
         severity_values = [
@@ -422,7 +607,8 @@ class AIAnalyzer:
 
         # 1. Gather data
         profile = await self._get_profile(user_id)
-        response_language = self._language_label(self._normalize_language(profile, preferred_language))
+        lang = self._normalize_language(profile, preferred_language)
+        response_language = self._language_label(lang)
         habits = await self._get_active_habits(user_id)
         
         # Get daily insights from the week
@@ -485,8 +671,23 @@ class AIAnalyzer:
 
         # 3. Generate
         print("[AI] Calling Gemini for weekly review...")
-        analysis = await self._generate(prompt, temperature=0.9)
-        analysis = self._normalize_weekly_analysis(analysis)
+        try:
+            analysis = await self._generate(prompt, temperature=0.9)
+            analysis = self._normalize_weekly_analysis(analysis)
+            if self._needs_ukrainian_fallback(analysis, lang):
+                raise ValueError("AI returned English text while Ukrainian was requested")
+        except Exception as err:
+            print(f"[AI] Weekly AI generation failed or wrong language; using local fallback: {err}")
+            analysis = self._build_weekly_fallback_analysis(
+                profile=profile,
+                habits=habits,
+                checkins=checkins,
+                triggers=triggers,
+                period_start=period_start,
+                period_end=period_end,
+                lang=lang,
+                reason=str(err),
+            )
 
         # 4. Store
         stored = await self._insert_ai_analysis({
