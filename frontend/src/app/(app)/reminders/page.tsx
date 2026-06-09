@@ -24,35 +24,118 @@ type Reminder = {
   habits?: { name?: string } | null;
 };
 
+type HabitOption = {
+  id: string;
+  name: string;
+};
+
+type RemindersResponse = {
+  reminders?: Reminder[];
+};
+
+type ReminderTypeValue =
+  | "danger_zone"
+  | "morning_checkin"
+  | "evening_review"
+  | "motivation"
+  | "streak_celebration"
+  | "custom";
+
 const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun as Supabase int? we'll store 0-6 with 0 Sunday for simplicity
+
+const REMINDER_DEFAULTS: Record<"en" | "uk", Record<ReminderTypeValue, { title: string; message: string }>> = {
+  en: {
+    danger_zone: {
+      title: "🔥 Danger Zone",
+      message: "High relapse risk detected. Open your War Room now.",
+    },
+    morning_checkin: {
+      title: "☀️ Morning check-in",
+      message: "Set your intent before the day starts moving without you.",
+    },
+    evening_review: {
+      title: "🌙 Evening review",
+      message: "Close the day honestly. Log what happened and protect tomorrow.",
+    },
+    motivation: {
+      title: "💪 Power dose",
+      message: "One clean choice now. No negotiation with the old pattern.",
+    },
+    streak_celebration: {
+      title: "🏆 Streak milestone",
+      message: "Another day on the board. Stack the evidence.",
+    },
+    custom: {
+      title: "⏰ Reminder",
+      message: "Time to act on the person you are becoming.",
+    },
+  },
+  uk: {
+    danger_zone: {
+      title: "🔥 Небезпечна зона",
+      message: "Виявлено високий ризик зриву. Відкрий Штаб і зроби захисну дію.",
+    },
+    morning_checkin: {
+      title: "☀️ Ранковий чек-ін",
+      message: "Постав намір на день до того, як день почне керувати тобою.",
+    },
+    evening_review: {
+      title: "🌙 Вечірній огляд",
+      message: "Закрий день чесно. Запиши, що сталося, і захисти завтра.",
+    },
+    motivation: {
+      title: "💪 Доза сили",
+      message: "Один чистий вибір зараз. Без переговорів зі старим патерном.",
+    },
+    streak_celebration: {
+      title: "🏆 Віха серії",
+      message: "Ще один день у скарбниці. Накопичуй докази нової ідентичності.",
+    },
+    custom: {
+      title: "⏰ Нагадування",
+      message: "Час діяти як людина, якою ти стаєш.",
+    },
+  },
+};
+
+function getReminderDefaults(language: "en" | "uk", type: string) {
+  return REMINDER_DEFAULTS[language][type as ReminderTypeValue] || REMINDER_DEFAULTS[language].custom;
+}
 
 export default function RemindersPage() {
   const t = useT();
   const addToast = useUIStore((s) => s.addToast);
+  const language = useUIStore((s) => s.language);
   const { data: habitsData } = useHabits();
-  const habits = (habitsData as any) || [];
+  const habits = (habitsData as HabitOption[]) || [];
 
   const { data, isLoading } = useReminders();
-  const reminders: Reminder[] = (data as any)?.reminders || [];
+  const reminders = useMemo(
+    () => (data as RemindersResponse | undefined)?.reminders || [],
+    [data]
+  );
 
   const createReminder = useCreateReminder();
   const updateReminder = useUpdateReminder();
   const deleteReminder = useDeleteReminder();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form, setForm] = useState({
-    reminder_type: "danger_zone",
-    habit_id: "",
-    is_smart: true,
-    is_enabled: true,
-    title: "🔥 Danger Zone",
-    message: "High relapse risk detected. Open your War Room now.",
-    time_of_day: "09:00",
-    days_of_week: DEFAULT_DAYS,
-    danger_threshold: 70,
-    cooldown_minutes: 180,
-    quiet_hours_start: "22:00",
-    quiet_hours_end: "07:00",
+  const [form, setForm] = useState(() => {
+    const defaults = getReminderDefaults(language, "danger_zone");
+    return {
+      reminder_type: "danger_zone",
+      habit_id: "",
+      is_smart: true,
+      is_enabled: true,
+      title: defaults.title,
+      message: defaults.message,
+      time_of_day: "09:00",
+      days_of_week: DEFAULT_DAYS,
+      danger_threshold: 70,
+      cooldown_minutes: 180,
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+    };
   });
 
   const sorted = useMemo(() => {
@@ -61,18 +144,19 @@ export default function RemindersPage() {
 
   const submit = async () => {
     try {
+      const smartEnabled = form.reminder_type === "danger_zone" && form.is_smart;
       const payload: Record<string, unknown> = {
         reminder_type: form.reminder_type,
         habit_id: form.habit_id || null,
-        is_smart: form.is_smart,
+        is_smart: smartEnabled,
         title: form.title,
         message: form.message,
       };
 
-      if (!form.is_smart) {
+      if (!smartEnabled) {
         payload.time_of_day = form.time_of_day;
         payload.days_of_week = form.days_of_week;
-      } else if (form.reminder_type === "danger_zone") {
+      } else {
         payload.danger_threshold = form.danger_threshold;
         payload.cooldown_minutes = form.cooldown_minutes;
         payload.quiet_hours_start = form.quiet_hours_start;
@@ -109,6 +193,8 @@ export default function RemindersPage() {
       addToast("error", "Failed to delete reminder.");
     }
   };
+
+  const smartAvailable = form.reminder_type === "danger_zone";
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -196,7 +282,17 @@ export default function RemindersPage() {
                 <select
                   className="input-forge"
                   value={form.reminder_type}
-                  onChange={(e) => setForm((s) => ({ ...s, reminder_type: e.target.value }))}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    const defaults = getReminderDefaults(language, nextType);
+                    setForm((s) => ({
+                      ...s,
+                      reminder_type: nextType,
+                      is_smart: nextType === "danger_zone" ? s.is_smart : false,
+                      title: defaults.title,
+                      message: defaults.message,
+                    }));
+                  }}
                 >
                   <option value="danger_zone">{t.reminder_type_danger_zone}</option>
                   <option value="morning_checkin">{t.reminder_type_morning_checkin}</option>
@@ -215,7 +311,7 @@ export default function RemindersPage() {
                   onChange={(e) => setForm((s) => ({ ...s, habit_id: e.target.value }))}
                 >
                   <option value="">{t.reminders_all_habits}</option>
-                  {habits.map((h: any) => (
+                  {habits.map((h) => (
                     <option key={h.id} value={h.id}>
                       {h.name}
                     </option>
@@ -231,14 +327,18 @@ export default function RemindersPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setForm((s) => ({ ...s, is_smart: !s.is_smart }))}
+                  onClick={() => {
+                    if (!smartAvailable) return;
+                    setForm((s) => ({ ...s, is_smart: !s.is_smart }));
+                  }}
+                  disabled={!smartAvailable}
                   className={`w-12 h-6 rounded-full transition-all relative ${
-                    form.is_smart ? "bg-[var(--accent-success)]" : "bg-[var(--bg-elevated)]"
+                    form.is_smart && smartAvailable ? "bg-[var(--accent-success)]" : "bg-[var(--bg-elevated)]"
                   }`}
                 >
                   <div
                     className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all ${
-                      form.is_smart ? "left-6" : "left-0.5"
+                      form.is_smart && smartAvailable ? "left-6" : "left-0.5"
                     }`}
                   />
                 </button>
@@ -355,4 +455,3 @@ export default function RemindersPage() {
     </div>
   );
 }
-

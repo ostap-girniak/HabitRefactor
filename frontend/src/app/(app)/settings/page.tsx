@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Settings as SettingsIcon,
@@ -27,6 +28,30 @@ import {
   unsubscribeFromPush,
 } from "@/lib/push";
 import { notificationsApi } from "@/lib/api";
+import type { UserProfile } from "@/lib/store";
+
+type DangerCheckResponse = {
+  sent?: number;
+  oracle?: {
+    forecast?: {
+      risk_score?: number;
+      danger_zone?: boolean;
+    };
+  };
+};
+
+type JournalAlertResponse = {
+  is_danger?: boolean;
+  found_keywords?: string[];
+};
+
+type ApiError = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -43,25 +68,24 @@ export default function SettingsPage() {
     if (!displayName.trim()) return;
     try {
       const { data } = await updateProfile.mutateAsync({ display_name: displayName.trim() });
-      setUser(data as any);
+      setUser(data as UserProfile);
       addToast("success", language === "uk" ? "Профіль збережено." : "Profile saved.");
     } catch {
       addToast("error", language === "uk" ? "Не вдалося зберегти." : "Failed to save profile.");
     }
   };
-  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSupported] = useState(() => isPushSupported());
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isTogglingPush, setIsTogglingPush] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showNotificationDiagnostics, setShowNotificationDiagnostics] = useState(false);
 
   useEffect(() => {
-    const supported = isPushSupported();
-    setPushSupported(supported);
-    if (!supported) return;
+    if (!pushSupported) return;
     getCurrentPushSubscription()
       .then((sub) => setNotificationsEnabled(!!sub))
       .catch(() => setNotificationsEnabled(false));
-  }, []);
+  }, [pushSupported]);
 
   const handleTogglePush = async () => {
     if (!pushSupported) {
@@ -185,7 +209,7 @@ export default function SettingsPage() {
           <Bell className="w-5 h-5 text-[var(--accent-ember)]" />
           <h2 className="font-bold text-[var(--text-primary)]">{t.settings_notifications}</h2>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-[var(--text-primary)]">{t.settings_push}</div>
@@ -206,72 +230,163 @@ export default function SettingsPage() {
               }`} />
             </button>
           </div>
-          {pushSupported && notificationsEnabled && (
+
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/50 p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-[var(--text-primary)]">
+                  {t.settings_notification_plan_title}
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  {t.settings_notification_plan_desc}
+                </p>
+              </div>
+              <span
+                className={`badge text-[10px] ${
+                  notificationsEnabled ? "badge-success" : ""
+                }`}
+              >
+                {notificationsEnabled
+                  ? t.settings_notifications_status_on
+                  : t.settings_notifications_status_off}
+              </span>
+            </div>
+
+            <div className="grid gap-2">
+              {[
+                {
+                  icon: <Bell className="w-4 h-4 text-[var(--accent-info)]" />,
+                  title: t.settings_notification_plan_journal_title,
+                  desc: t.settings_notification_plan_journal_desc,
+                },
+                {
+                  icon: <Flame className="w-4 h-4 text-[var(--accent-danger)]" />,
+                  title: t.settings_notification_plan_danger_title,
+                  desc: t.settings_notification_plan_danger_desc,
+                },
+                {
+                  icon: <SettingsIcon className="w-4 h-4 text-[var(--accent-ember)]" />,
+                  title: t.settings_notification_plan_schedule_title,
+                  desc: t.settings_notification_plan_schedule_desc,
+                },
+                {
+                  icon: <Shield className="w-4 h-4 text-[var(--accent-success)]" />,
+                  title: t.settings_notification_plan_streak_title,
+                  desc: t.settings_notification_plan_streak_desc,
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="flex items-start gap-3 rounded-lg bg-[var(--bg-primary)] px-3 py-2"
+                >
+                  <div className="mt-0.5">{item.icon}</div>
+                  <div>
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      {item.title}
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {item.desc}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div className="flex flex-wrap gap-2">
+              <Link href="/reminders" className="btn-fire text-sm">
+                {t.settings_notification_plan_configure}
+              </Link>
+              <Link href="/journal/notifications" className="btn-ghost text-sm">
+                {t.settings_notification_plan_history}
+              </Link>
+            </div>
+          </div>
+
+          {pushSupported && notificationsEnabled && (
+            <div className="border-t border-[var(--border-default)] pt-3">
               <button
-                onClick={async () => {
-                  try {
-                    await sendTestPush();
-                    addToast("success", "Test push sent.");
-                  } catch (err) {
-                    console.error("Test push failed:", err);
-                    addToast("error", "Failed to send test push.");
-                  }
-                }}
-                className="btn-ghost text-sm"
+                onClick={() => setShowNotificationDiagnostics((value) => !value)}
+                className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
-                {t.settings_test_push}
+                {showNotificationDiagnostics
+                  ? t.settings_notifications_hide_diagnostics
+                  : t.settings_notifications_show_diagnostics}
               </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const data = await runDangerCheck();
-                    const risk = data?.oracle?.forecast?.risk_score;
-                    const danger = data?.oracle?.forecast?.danger_zone;
-                    addToast("info", `Danger check: risk ${risk ?? "?"}/100${danger ? " (DANGER)" : ""}`);
-                  } catch (err) {
-                    console.error("Danger check failed:", err);
-                    addToast("error", "Failed to run danger check.");
-                  }
-                }}
-                className="btn-ghost text-sm"
-              >
-                {t.settings_danger_check}
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const data = await runDangerCheck({ forceSend: true });
-                    addToast("success", `Force push sent (${data?.sent ?? 0}).`);
-                  } catch (err) {
-                    console.error("Force push failed:", err);
-                    addToast("error", "Failed to force danger push.");
-                  }
-                }}
-                className="btn-ghost text-sm"
-              >
-                {t.settings_force_push}
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const { data } = await notificationsApi.journalAlert();
-                    if ((data as any).is_danger) {
-                      addToast("success", `Danger push sent! Keywords: ${(data as any).found_keywords.join(', ')}`);
-                    } else {
-                      addToast("success", "Motivation push sent! No danger detected.");
-                    }
-                  } catch (err: any) {
-                    console.error("Journal alert failed:", err);
-                    const msg = err?.response?.data?.detail || "Failed to trigger journal alert.";
-                    addToast("error", msg);
-                  }
-                }}
-                className="btn-ghost text-sm text-[var(--accent-info)] border-[var(--accent-info)]"
-              >
-                {t.settings_journal_alert}
-              </button>
-              <a href="/reminders" className="btn-ghost text-sm">{t.settings_configure_danger}</a>
+
+              {showNotificationDiagnostics && (
+                <div className="mt-3 rounded-xl bg-[var(--bg-elevated)]/50 p-3">
+                  <p className="text-xs text-[var(--text-muted)] mb-3">
+                    {t.settings_notifications_diagnostics_desc}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await sendTestPush();
+                          addToast("success", "Test push sent.");
+                        } catch (err) {
+                          console.error("Test push failed:", err);
+                          addToast("error", "Failed to send test push.");
+                        }
+                      }}
+                      className="btn-ghost text-sm"
+                    >
+                      {t.settings_test_push}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const data = (await runDangerCheck()) as DangerCheckResponse;
+                          const risk = data?.oracle?.forecast?.risk_score;
+                          const danger = data?.oracle?.forecast?.danger_zone;
+                          addToast("info", `Danger check: risk ${risk ?? "?"}/100${danger ? " (DANGER)" : ""}`);
+                        } catch (err) {
+                          console.error("Danger check failed:", err);
+                          addToast("error", "Failed to run danger check.");
+                        }
+                      }}
+                      className="btn-ghost text-sm"
+                    >
+                      {t.settings_danger_check}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const data = (await runDangerCheck({ forceSend: true })) as DangerCheckResponse;
+                          addToast("success", `Force push sent (${data?.sent ?? 0}).`);
+                        } catch (err) {
+                          console.error("Force push failed:", err);
+                          addToast("error", "Failed to force danger push.");
+                        }
+                      }}
+                      className="btn-ghost text-sm"
+                    >
+                      {t.settings_force_push}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { data } = await notificationsApi.journalAlert();
+                          const payload = data as JournalAlertResponse;
+                          if (payload.is_danger) {
+                            addToast("success", `Danger push sent! Keywords: ${(payload.found_keywords || []).join(", ")}`);
+                          } else {
+                            addToast("success", "Motivation push sent! No danger detected.");
+                          }
+                        } catch (err: unknown) {
+                          console.error("Journal alert failed:", err);
+                          const apiErr = err as ApiError;
+                          const msg = apiErr.response?.data?.detail || "Failed to trigger journal alert.";
+                          addToast("error", msg);
+                        }
+                      }}
+                      className="btn-ghost text-sm text-[var(--accent-info)] border-[var(--accent-info)]"
+                    >
+                      {t.settings_journal_alert}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

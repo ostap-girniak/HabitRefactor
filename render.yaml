@@ -30,6 +30,6 @@ services:
       - key: ENABLE_PATTERN_INTERCEPTOR
         value: "true"
       - key: ENABLE_RELAPSE_INTERCEPTOR
-        value: "false"
+        value: "true"
       - key: ENABLE_SCHEDULED_REMINDERS
-        value: "false"
+        value: "true"
