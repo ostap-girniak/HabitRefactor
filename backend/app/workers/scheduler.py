@@ -15,7 +15,8 @@ from app.stats.oracle import compute_oracle
 
 _scheduler: Optional[AsyncIOScheduler] = None
 _DEFAULT_CHECKIN_TZ = ZoneInfo("Europe/Kyiv")
-_DEFAULT_CHECKIN_SLOTS = ("10:00", "14:00", "21:00")
+_DEFAULT_CHECKIN_SLOTS = ("00:20", "10:00", "14:00", "21:00")
+_DEFAULT_CHECKIN_GRACE_MINUTES = 10
 _default_checkin_sent_cache: set[tuple[str, str, str]] = set()
 
 
@@ -575,7 +576,7 @@ def _current_default_checkin_slot(now: datetime) -> Optional[tuple[str, datetime
     for slot in _DEFAULT_CHECKIN_SLOTS:
         slot_time = time.fromisoformat(slot)
         slot_minutes = slot_time.hour * 60 + slot_time.minute
-        if 0 <= current_minutes - slot_minutes <= 1:
+        if 0 <= current_minutes - slot_minutes <= _DEFAULT_CHECKIN_GRACE_MINUTES:
             return slot, now_kyiv
     return None
 
@@ -621,6 +622,18 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
     slot, now_kyiv = slot_info
 
     try:
+        profiles_resp = await (
+            admin_client.table("profiles")
+            .select("*")
+            .limit(5000)
+            .execute()
+        )
+        profiles = profiles_resp.data or []
+    except Exception as e:
+        print(f"[WARN] Default check-in reminders: failed to read profiles: {e}")
+        return
+
+    try:
         subs_resp = await (
             admin_client.table("push_subscriptions")
             .select("user_id, endpoint, p256dh_key, auth_key, keys, is_active")
@@ -643,7 +656,7 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
             ]
         except Exception as e:
             print(f"[WARN] Default check-in reminders: failed to read push subscriptions: {e}")
-            return
+            subscriptions = []
 
     subscriptions_by_user: dict[str, list[dict]] = {}
     for sub in subscriptions:
@@ -655,7 +668,11 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
     settings = get_settings()
     date_key = now_kyiv.date().isoformat()
 
-    for user_id, user_subs in subscriptions_by_user.items():
+    for profile in profiles:
+        user_id = str(profile.get("id") or "")
+        if not user_id:
+            continue
+
         cache_key = (user_id, date_key, slot)
         if cache_key in _default_checkin_sent_cache:
             continue
@@ -669,25 +686,13 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
             _default_checkin_sent_cache.add(cache_key)
             continue
 
-        user_lang = "uk"
-        try:
-            prof = (
-                await admin_client.table("profiles")
-                .select("*")
-                .eq("id", user_id)
-                .single()
-                .execute()
-            )
-            prof_data = prof.data or {}
-            user_lang = nt.normalize_lang(
-                prof_data.get("preferred_language") or prof_data.get("locale")
-            )
-        except Exception:
-            user_lang = "uk"
+        user_lang = nt.normalize_lang(
+            profile.get("preferred_language") or profile.get("locale")
+        )
 
         title, body = nt.pick_default_checkin_reminder(user_lang, slot)
         sent_any = False
-        for sub in user_subs:
+        for sub in subscriptions_by_user.get(user_id, []):
             err = await send_web_push(
                 settings=settings,
                 subscription=sub,
@@ -710,9 +715,6 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
                 except Exception:
                     pass
 
-        if not sent_any:
-            continue
-
         await save_notification_to_history(
             client=admin_client,
             user_id=user_id,
@@ -728,7 +730,10 @@ async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
             },
         )
         _default_checkin_sent_cache.add(cache_key)
-        print(f"[PUSH] Default check-in reminder sent user={user_id} slot={slot}")
+        if sent_any:
+            print(f"[PUSH] Default check-in reminder sent user={user_id} slot={slot}")
+        else:
+            print(f"[NOTIFICATION] Default check-in reminder saved user={user_id} slot={slot}")
 
 
 # ---- Scheduled Reminders ----

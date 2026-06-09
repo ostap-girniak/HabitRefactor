@@ -293,11 +293,13 @@ def scheduled_reminder_defaults(lang: Optional[str], reminder_type: str) -> tupl
 
 DEFAULT_CHECKIN_REMINDERS = {
     "en": {
+        "00:20": ("Check-in reminder", "Test reminder: open check-in and mark your current state."),
         "10:00": ("Morning check-in", "Take one minute to mark your state and set the tone for today."),
         "14:00": ("Midday check-in", "Pause, check your state, and keep the day under your control."),
         "21:00": ("Evening check-in", "Close the day honestly. Log your progress and protect tomorrow."),
     },
     "uk": {
+        "00:20": ("Нагадування про чек-ін", "Тестове нагадування: відкрий чек-ін і зафіксуй свій стан."),
         "10:00": ("Ранковий чек-ін", "Зайди на хвилину, зафіксуй стан і задай напрямок дню."),
         "14:00": ("Денний чек-ін", "Зупинись на мить, перевір стан і втримай день під контролем."),
         "21:00": ("Вечірній чек-ін", "Закрий день чесно: відміть прогрес і захисти завтрашнього себе."),

@@ -591,6 +591,7 @@ export function useNotificationHistory(limit?: number) {
       const { data } = await notificationsApi.getHistory(limit);
       return data;
     },
+    refetchInterval: 30_000,
   });
 }
 
