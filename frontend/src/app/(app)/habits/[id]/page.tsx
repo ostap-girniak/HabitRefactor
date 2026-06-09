@@ -5,10 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Settings,
+  Trash2,
   CalendarCheck,
   TrendingUp,
   DollarSign,
-  Clock,
   Target,
   AlertTriangle,
   Flame,
@@ -16,8 +16,18 @@ import {
 import { SobrietyCounter } from "@/components/dashboard/SobrietyCounter";
 import { StreakCalendar } from "@/components/dashboard/StreakCalendar";
 import { getCategoryEmoji, formatMoney } from "@/lib/utils";
-import { useHabit, useCheckinCalendar } from "@/lib/hooks";
+import { useDeleteHabit, useHabit, useCheckinCalendar } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
+
+type StreakDay = {
+  date: string;
+  result: "success" | "relapse" | "partial" | null;
+  created_at?: string;
+};
+
+type CheckinCalendarResponse = {
+  calendar?: StreakDay[];
+};
 
 export default function HabitDetailPage() {
   const params = useParams();
@@ -26,7 +36,16 @@ export default function HabitDetailPage() {
   const habitId = params.id as string;
 
   const { data: habit, isLoading: habitLoading } = useHabit(habitId);
-  const { data: calendarData } = useCheckinCalendar(habitId);
+  const { data: calendarData } = useCheckinCalendar(habitId) as {
+    data?: CheckinCalendarResponse;
+  };
+  const deleteHabit = useDeleteHabit();
+
+  const handleDelete = async () => {
+    if (!confirm(t.habit_detail_delete_confirm)) return;
+    await deleteHabit.mutateAsync(habitId);
+    router.push("/habits");
+  };
 
   if (habitLoading) {
     return (
@@ -66,9 +85,20 @@ export default function HabitDetailPage() {
             <p className="text-sm text-[var(--text-secondary)] mt-0.5">{habit.description}</p>
           </div>
         </div>
-        <button className="btn-ghost text-sm flex items-center gap-1">
-          <Settings className="w-4 h-4" /> {t.edit}
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="btn-ghost text-sm flex items-center gap-1">
+            <Settings className="w-4 h-4" /> {t.edit}
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleteHabit.isPending}
+            className="btn-ghost text-sm flex items-center gap-1 text-[var(--accent-danger)] disabled:opacity-50"
+            title={t.delete}
+          >
+            <Trash2 className="w-4 h-4" />
+            {deleteHabit.isPending ? t.loading : t.delete}
+          </button>
+        </div>
       </div>
 
       {/* Sobriety Counter */}
@@ -121,7 +151,7 @@ export default function HabitDetailPage() {
       </div>
 
       {/* Calendar */}
-      <StreakCalendar data={(calendarData as any)?.calendar || []} months={3} />
+      <StreakCalendar data={calendarData?.calendar || []} months={3} />
 
       {/* Known Triggers */}
       {habit.initial_triggers && habit.initial_triggers.length > 0 && (

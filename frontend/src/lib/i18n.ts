@@ -447,6 +447,7 @@ const translations = {
     habit_detail_tracking_unit: "Tracking Unit",
     habit_detail_cost_per: "Cost per {unit}",
     habit_detail_not_set: "Not set",
+    habit_detail_delete_confirm: "Delete this habit and its tracking history?",
 
     // Journal Detail
     journal_detail_back: "Back to History",
@@ -1054,6 +1055,7 @@ const translations = {
     habit_detail_tracking_unit: "Одиниця відстеження",
     habit_detail_cost_per: "Вартість за {unit}",
     habit_detail_not_set: "Не встановлено",
+    habit_detail_delete_confirm: "Видалити цю звичку та її історію відстеження?",
 
     // Journal Detail
     journal_detail_back: "Назад до архіву",
