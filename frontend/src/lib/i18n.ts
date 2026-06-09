@@ -32,6 +32,7 @@ const translations = {
     notifications_history_subtitle: "Every alert, journal analysis, and warning in one place.",
     notifications_back_to_journal: "Back to Journal",
     notifications_open_journal_entry: "Open journal entry",
+    notifications_open_checkin: "Start check-in",
 
     // Common
     loading: "Loading...",
@@ -657,6 +658,7 @@ const translations = {
     notifications_history_subtitle: "Усі сигнали, аналізи журналу й попередження в одному місці.",
     notifications_back_to_journal: "Назад до Журналу",
     notifications_open_journal_entry: "Відкрити запис журналу",
+    notifications_open_checkin: "Пройти чек-ін",
 
     // Common
     loading: "Завантаження...",

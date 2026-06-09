@@ -291,16 +291,36 @@ def scheduled_reminder_defaults(lang: Optional[str], reminder_type: str) -> tupl
     )
 
 
+DEFAULT_CHECKIN_REMINDERS = {
+    "en": {
+        "10:00": ("Morning check-in", "Take one minute to mark your state and set the tone for today."),
+        "14:00": ("Midday check-in", "Pause, check your state, and keep the day under your control."),
+        "21:00": ("Evening check-in", "Close the day honestly. Log your progress and protect tomorrow."),
+    },
+    "uk": {
+        "10:00": ("Ранковий чек-ін", "Зайди на хвилину, зафіксуй стан і задай напрямок дню."),
+        "14:00": ("Денний чек-ін", "Зупинись на мить, перевір стан і втримай день під контролем."),
+        "21:00": ("Вечірній чек-ін", "Закрий день чесно: відміть прогрес і захисти завтрашнього себе."),
+    },
+}
+
+
+def pick_default_checkin_reminder(lang: Optional[str], slot: str) -> tuple[str, str]:
+    L = normalize_lang(lang)
+    return DEFAULT_CHECKIN_REMINDERS[L].get(slot, DEFAULT_CHECKIN_REMINDERS[L]["10:00"])
+
+
 async def get_user_lang(client, user_id: str) -> Lang:
-    """Read user's preferred_language from profiles. Default 'uk'."""
+    """Read user's language from profiles. Default 'uk'."""
     try:
         resp = await (
             client.table("profiles")
-            .select("preferred_language")
+            .select("*")
             .eq("id", user_id)
             .single()
             .execute()
         )
-        return normalize_lang((resp.data or {}).get("preferred_language"))
+        data = resp.data or {}
+        return normalize_lang(data.get("preferred_language") or data.get("locale"))
     except Exception:
         return "uk"

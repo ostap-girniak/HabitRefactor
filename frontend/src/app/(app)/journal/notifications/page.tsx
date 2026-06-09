@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, CheckCheck, ChevronLeft, ExternalLink } from "lucide-react";
+import { Bell, CheckCheck, ChevronLeft, ClipboardCheck, ExternalLink } from "lucide-react";
 import {
   useMarkAllRead,
   useMarkNotificationRead,
@@ -44,6 +44,7 @@ function formatDate(date: string, locale: string) {
 }
 
 function typeLabel(type: string, isUk: boolean) {
+  if (type.includes("checkin")) return isUk ? "Чек-ін" : "Check-in";
   if (type.includes("journal")) return isUk ? "Журнал" : "Journal";
   if (type.includes("danger")) return isUk ? "Ризик" : "Risk";
   if (type.includes("streak")) return isUk ? "Серія" : "Streak";
@@ -110,6 +111,8 @@ export default function JournalNotificationsPage() {
             const journalEntryId = metadata.journal_entry_id;
             const themes = metadata.key_themes || [];
             const emotions = metadata.detected_emotions || {};
+            const actionUrl = notification.url || "";
+            const isCheckinAction = actionUrl.startsWith("/checkin");
 
             return (
               <div
@@ -191,6 +194,20 @@ export default function JournalNotificationsPage() {
                         >
                           {t.notifications_mark_read}
                         </button>
+                      )}
+                      {isCheckinAction && (
+                        <Link
+                          href="/checkin"
+                          onClick={() => {
+                            if (!notification.is_read) {
+                              markRead.mutate(notification.id);
+                            }
+                          }}
+                          className="btn-fire text-xs py-2 inline-flex items-center gap-2"
+                        >
+                          <ClipboardCheck className="w-3 h-3" />
+                          {t.notifications_open_checkin}
+                        </Link>
                       )}
                       {journalEntryId && (
                         <Link

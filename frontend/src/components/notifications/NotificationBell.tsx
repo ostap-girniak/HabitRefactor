@@ -39,6 +39,8 @@ function timeAgo(dateStr: string, t: ReturnType<typeof useT>): string {
 
 function typeIcon(type: string): string {
   switch (type) {
+    case "checkin_reminder":
+      return "C";
     case "danger_zone":
     case "journal_analysis_warning":
       return "!";

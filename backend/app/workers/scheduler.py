@@ -14,6 +14,9 @@ from app.notifications import templates as nt
 from app.stats.oracle import compute_oracle
 
 _scheduler: Optional[AsyncIOScheduler] = None
+_DEFAULT_CHECKIN_TZ = ZoneInfo("Europe/Kyiv")
+_DEFAULT_CHECKIN_SLOTS = ("10:00", "14:00", "21:00")
+_default_checkin_sent_cache: set[tuple[str, str, str]] = set()
 
 
 def _utcnow() -> datetime:
@@ -563,6 +566,171 @@ async def _run_relapse_interceptor_tick() -> None:
             )
 
 
+# ---- Default Check-in Reminders ----
+
+def _current_default_checkin_slot(now: datetime) -> Optional[tuple[str, datetime]]:
+    """Return the Kyiv check-in slot if this tick is inside the send window."""
+    now_kyiv = now.astimezone(_DEFAULT_CHECKIN_TZ)
+    current_minutes = now_kyiv.hour * 60 + now_kyiv.minute
+    for slot in _DEFAULT_CHECKIN_SLOTS:
+        slot_time = time.fromisoformat(slot)
+        slot_minutes = slot_time.hour * 60 + slot_time.minute
+        if 0 <= current_minutes - slot_minutes <= 1:
+            return slot, now_kyiv
+    return None
+
+
+async def _default_checkin_history_exists(
+    admin_client,
+    *,
+    user_id: str,
+    slot: str,
+    now_kyiv: datetime,
+) -> bool:
+    day_start_kyiv = now_kyiv.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_kyiv = day_start_kyiv + timedelta(days=1)
+    try:
+        resp = await (
+            admin_client.table("notification_history")
+            .select("id, metadata")
+            .eq("user_id", user_id)
+            .eq("notification_type", "checkin_reminder")
+            .gte("created_at", day_start_kyiv.astimezone(timezone.utc).isoformat())
+            .lt("created_at", day_end_kyiv.astimezone(timezone.utc).isoformat())
+            .limit(20)
+            .execute()
+        )
+    except Exception as e:
+        print(f"[WARN] Default check-in dedupe history check failed: {e}")
+        return False
+
+    for row in resp.data or []:
+        metadata = row.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("kind") == "default_daily_checkin" and metadata.get("slot") == slot:
+            return True
+    return False
+
+
+async def _run_default_checkin_reminders(admin_client, now: datetime) -> None:
+    slot_info = _current_default_checkin_slot(now)
+    if slot_info is None:
+        return
+
+    slot, now_kyiv = slot_info
+
+    try:
+        subs_resp = await (
+            admin_client.table("push_subscriptions")
+            .select("user_id, endpoint, p256dh_key, auth_key, keys, is_active")
+            .eq("is_active", True)
+            .limit(2000)
+            .execute()
+        )
+        subscriptions = subs_resp.data or []
+    except Exception:
+        try:
+            subs_resp = await (
+                admin_client.table("push_subscriptions")
+                .select("user_id, endpoint, keys")
+                .limit(2000)
+                .execute()
+            )
+            subscriptions = [
+                sub for sub in (subs_resp.data or [])
+                if sub.get("is_active") is not False
+            ]
+        except Exception as e:
+            print(f"[WARN] Default check-in reminders: failed to read push subscriptions: {e}")
+            return
+
+    subscriptions_by_user: dict[str, list[dict]] = {}
+    for sub in subscriptions:
+        user_id = sub.get("user_id")
+        if not user_id:
+            continue
+        subscriptions_by_user.setdefault(str(user_id), []).append(sub)
+
+    settings = get_settings()
+    date_key = now_kyiv.date().isoformat()
+
+    for user_id, user_subs in subscriptions_by_user.items():
+        cache_key = (user_id, date_key, slot)
+        if cache_key in _default_checkin_sent_cache:
+            continue
+
+        if await _default_checkin_history_exists(
+            admin_client,
+            user_id=user_id,
+            slot=slot,
+            now_kyiv=now_kyiv,
+        ):
+            _default_checkin_sent_cache.add(cache_key)
+            continue
+
+        user_lang = "uk"
+        try:
+            prof = (
+                await admin_client.table("profiles")
+                .select("*")
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+            prof_data = prof.data or {}
+            user_lang = nt.normalize_lang(
+                prof_data.get("preferred_language") or prof_data.get("locale")
+            )
+        except Exception:
+            user_lang = "uk"
+
+        title, body = nt.pick_default_checkin_reminder(user_lang, slot)
+        sent_any = False
+        for sub in user_subs:
+            err = await send_web_push(
+                settings=settings,
+                subscription=sub,
+                title=title,
+                body=body,
+                url="/checkin",
+                tag=f"default-checkin-{slot.replace(':', '')}",
+            )
+            if err is None:
+                sent_any = True
+                continue
+            if err == "subscription_gone":
+                try:
+                    await (
+                        admin_client.table("push_subscriptions")
+                        .update({"is_active": False})
+                        .eq("endpoint", sub.get("endpoint"))
+                        .execute()
+                    )
+                except Exception:
+                    pass
+
+        if not sent_any:
+            continue
+
+        await save_notification_to_history(
+            client=admin_client,
+            user_id=user_id,
+            title=title,
+            body=body,
+            notification_type="checkin_reminder",
+            url="/checkin",
+            metadata={
+                "kind": "default_daily_checkin",
+                "slot": slot,
+                "timezone": "Europe/Kyiv",
+                "action": "checkin",
+            },
+        )
+        _default_checkin_sent_cache.add(cache_key)
+        print(f"[PUSH] Default check-in reminder sent user={user_id} slot={slot}")
+
+
 # ---- Scheduled Reminders ----
 
 async def _run_scheduled_reminders_tick() -> None:
@@ -581,6 +749,9 @@ async def _run_scheduled_reminders_tick() -> None:
         print(f"[WARN] Scheduled reminders: admin client error: {e}")
         return
 
+    now = _utcnow()
+    await _run_default_checkin_reminders(admin_client, now)
+
     try:
         reminders_resp = await (
             admin_client.table("reminders")
@@ -598,8 +769,6 @@ async def _run_scheduled_reminders_tick() -> None:
     except Exception as e:
         print(f"[WARN] Scheduled reminders disabled due to schema mismatch: {e}")
         return
-
-    now = _utcnow()
 
     for r in reminders:
         time_of_day_str = r.get("time_of_day")
