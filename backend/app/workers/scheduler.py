@@ -15,7 +15,7 @@ from app.stats.oracle import compute_oracle
 
 _scheduler: Optional[AsyncIOScheduler] = None
 _DEFAULT_CHECKIN_TZ = ZoneInfo("Europe/Kyiv")
-_DEFAULT_CHECKIN_SLOTS = ("00:20", "10:00", "14:00", "21:00")
+_DEFAULT_CHECKIN_SLOTS = ("09:00", "14:00", "21:00")
 _DEFAULT_CHECKIN_GRACE_MINUTES = 10
 _default_checkin_sent_cache: set[tuple[str, str, str]] = set()
 
