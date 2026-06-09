@@ -115,7 +115,8 @@ export const aiApi = {
   submitFeedback: (id: string, data: Record<string, unknown>) =>
     api.post(`/ai/insights/${id}/feedback`, data),
   getHeroChapters: () => api.get("/ai/hero/chapters"),
-  generateHeroChapter: () => api.post("/ai/hero/generate"),
+  generateHeroChapter: (data?: Record<string, unknown>) =>
+    api.post("/ai/hero/generate", data || {}),
   generateLetter: (data: Record<string, unknown>) =>
     api.post("/ai/catalyst/letter", data),
   generateManifesto: () => api.post("/ai/catalyst/manifesto"),

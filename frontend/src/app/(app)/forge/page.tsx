@@ -30,6 +30,9 @@ interface HeroChapter {
   chapter_number: number;
   title: string;
   narrative: string;
+  character_growth?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
 }
 
 interface HabitOption {
@@ -64,6 +67,23 @@ function formatDuration(totalSeconds: number) {
 
 function sanitizeManifestoMetadata(entries: VoiceManifestoEntry[]) {
   return entries.map(({ legacyAudioDataUrl: _legacyAudioDataUrl, ...entry }) => entry);
+}
+
+function loadStoredManifestos() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(VOICE_MANIFESTO_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as VoiceManifestoEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry) => ({
+      ...entry,
+      mimeType: entry.mimeType || "audio/webm",
+    }));
+  } catch (error) {
+    console.error("Failed to load voice manifestos:", error);
+    return [];
+  }
 }
 
 function openVoiceManifestoDb() {
@@ -163,11 +183,13 @@ export default function ForgePage() {
   const [triggerPrompt, setTriggerPrompt] = useState(
     "Play this when I start negotiating with the old version of me."
   );
-  const [savedManifestos, setSavedManifestos] = useState<VoiceManifestoEntry[]>([]);
+  const [savedManifestos, setSavedManifestos] = useState<VoiceManifestoEntry[]>(loadStoredManifestos);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingRecording, setIsProcessingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [activeManifestoId, setActiveManifestoId] = useState<string | null>(null);
+  const [activeManifestoId, setActiveManifestoId] = useState<string | null>(
+    () => loadStoredManifestos()[0]?.id || null
+  );
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [manifestoView, setManifestoView] = useState<"record" | "history">("record");
   const [manifestoAudioUrls, setManifestoAudioUrls] = useState<Record<string, string>>({});
@@ -211,33 +233,12 @@ export default function ForgePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(VOICE_MANIFESTO_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as VoiceManifestoEntry[];
-      if (Array.isArray(parsed)) {
-        setSavedManifestos(
-          parsed.map((entry) => ({
-            ...entry,
-            mimeType: entry.mimeType || "audio/webm",
-          }))
-        );
-        setActiveManifestoId(parsed[0]?.id || null);
-      }
-    } catch (error) {
-      console.error("Failed to load voice manifestos:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
       window.localStorage.setItem(
         VOICE_MANIFESTO_STORAGE_KEY,
         JSON.stringify(sanitizeManifestoMetadata(savedManifestos))
       );
     } catch (error) {
       console.error("Failed to persist voice manifesto metadata:", error);
-      setActionError("The recording metadata could not be saved locally.");
     }
   }, [savedManifestos]);
 
@@ -330,12 +331,9 @@ export default function ForgePage() {
     setActionError(null);
     setActionInfo(null);
     try {
-      const { data } = await Promise.race([
-        generateChapter.mutateAsync(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), TOOL_TIMEOUT_MS);
-        }),
-      ]);
+      const { data } = await generateChapter.mutateAsync({
+        ...(currentHabitId ? { habit_id: currentHabitId } : {}),
+      });
       if (typeof data?.message === "string" && data.message.toLowerCase().includes("fallback")) {
         setActionInfo("Hero Mode was generated in fallback mode because the AI provider was busy.");
       } else if (data?.provider === "openai_compat") {
@@ -344,11 +342,7 @@ export default function ForgePage() {
         setActionInfo("A new Hero Mode chapter was forged successfully.");
       }
     } catch (error) {
-      const message =
-        error instanceof Error && error.message === "REQUEST_TIMEOUT"
-          ? "Hero Mode took too long to respond. Try again in a moment."
-          : "Could not generate the chapter. Try again in a few seconds.";
-      setActionError(message);
+      setActionError("Could not generate the chapter. Try again in a few seconds.");
       console.error("Failed to generate hero chapter:", error);
     }
   };
@@ -788,6 +782,19 @@ export default function ForgePage() {
             </button>
           </div>
 
+          {chapterList.length > 0 && (
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-[var(--text-primary)]">
+                  {t.forge_hero_history_title}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {t.forge_hero_history_desc.replace("{count}", String(chapterList.length))}
+                </p>
+              </div>
+            </div>
+          )}
+
           {chapterList.map((chapter) => (
             <div key={chapter.id} className="card">
               <div className="flex items-center gap-3 mb-3">
@@ -795,11 +802,19 @@ export default function ForgePage() {
                   <BookOpen className="w-5 h-5 text-[#7C4DFF]" />
                 </div>
                 <div>
-                  <div className="text-xs text-[var(--text-muted)]">{t.forge_hero_chapter} {chapter.chapter_number}</div>
+                  <div className="text-xs text-[var(--text-muted)]">
+                    {t.forge_hero_chapter} {chapter.chapter_number}
+                    {chapter.period_start && chapter.period_end ? ` · ${chapter.period_start} - ${chapter.period_end}` : ""}
+                  </div>
                   <h3 className="font-bold text-[var(--text-primary)]">{chapter.title}</h3>
                 </div>
               </div>
               <p className="text-sm text-[var(--text-secondary)] italic">&ldquo;{chapter.narrative}&rdquo;</p>
+              {chapter.character_growth && (
+                <p className="text-sm text-[var(--text-muted)] mt-3 border-l-2 border-[#7C4DFF]/50 pl-3">
+                  {chapter.character_growth}
+                </p>
+              )}
             </div>
           ))}
 

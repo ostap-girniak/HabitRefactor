@@ -353,6 +353,15 @@ class AIAnalyzer:
         analysis["commander_briefing"] = self._as_text(analysis.get("commander_briefing"))
         return analysis
 
+    def _normalize_hero_chapter(self, chapter: dict, chapter_number: int) -> dict:
+        chapter = chapter or {}
+        chapter["title"] = self._as_text(chapter.get("title"), f"Chapter {chapter_number}")
+        chapter["narrative"] = self._as_text(chapter.get("narrative"))
+        chapter["victories"] = self._as_list(chapter.get("victories"))
+        chapter["battles"] = self._as_list(chapter.get("battles"))
+        chapter["character_growth"] = self._as_text(chapter.get("character_growth"))
+        return chapter
+
     async def _insert_ai_analysis(self, row: dict):
         """Insert analysis rows across current and older Supabase schemas."""
         attempts = [row]
@@ -391,6 +400,119 @@ class AIAnalyzer:
                     continue
                 raise
         raise last_error
+
+    async def _insert_hero_chapter(self, row: dict):
+        """Insert a Hero Mode chapter and return the persisted row."""
+        attempts = [
+            row,
+            {k: v for k, v in row.items() if k not in {"victories", "battles", "character_growth"}},
+        ]
+        last_error = None
+        for attempt in attempts:
+            try:
+                return await self.db.table("hero_chapters").insert(attempt).execute()
+            except APIError as err:
+                last_error = err
+                message = str(err).lower()
+                if "schema cache" in message or "could not find" in message:
+                    continue
+                raise
+        raise last_error
+
+    async def _next_hero_chapter_number(self, user_id: str) -> int:
+        chapters_resp = await (
+            self.db.table("hero_chapters")
+            .select("chapter_number")
+            .eq("user_id", user_id)
+            .order("chapter_number", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return (chapters_resp.data[0]["chapter_number"] + 1) if chapters_resp.data else 1
+
+    async def _previous_hero_chapters_summary(self, user_id: str) -> str:
+        chapters_resp = await (
+            self.db.table("hero_chapters")
+            .select("chapter_number, title, narrative")
+            .eq("user_id", user_id)
+            .order("chapter_number", desc=True)
+            .limit(3)
+            .execute()
+        )
+        chapters = chapters_resp.data or []
+        if not chapters:
+            return "First chapter"
+        return "\n".join(
+            f"Chapter {c.get('chapter_number')}: {c.get('title')} - {self._as_text(c.get('narrative'))[:240]}"
+            for c in chapters
+        )
+
+    def _build_local_hero_chapter(
+        self,
+        *,
+        profile: dict,
+        habits: list[dict],
+        victories: list[dict],
+        defeats: list[dict],
+        chapter_number: int,
+        period_start: str,
+        period_end: str,
+        lang: str,
+        reason: str | None = None,
+    ) -> dict:
+        display_name = profile.get("display_name") or "Warrior"
+        habit_names = ", ".join(h.get("name", "habit") for h in habits) or "active habits"
+        victory_count = len(victories)
+        defeat_count = len(defeats)
+
+        if lang == "uk":
+            title = f"Глава {chapter_number}: Тиждень, який тримав лінію"
+            narrative = (
+                f"{display_name} входить у період з {period_start} до {period_end} не як пасивний спостерігач, "
+                f"а як людина, що вчиться бачити правду в даних. Поле бою цього тижня: {habit_names}.\n\n"
+                f"Система зафіксувала {victory_count} перемог і {defeat_count} програних моментів. "
+                "Перемоги показують, що нова ідентичність уже має докази. Поразки не стирають шлях, "
+                "вони позначають місця, де старий патерн ще шукає слабкий вхід.\n\n"
+                "Ця глава не про ідеальність. Вона про продовження руху після кожного чесного чек-іну. "
+                "Наступний тиждень вимагає простого фокусу: один день, одна дія, одна чиста перемога за раз."
+            )
+            if reason:
+                narrative += "\n\nAI-провайдер був тимчасово недоступний, тому глава створена локально на основі твоїх даних."
+            character_growth = (
+                "Користувач переходить від випадкової боротьби до спостереження за власною системою поведінки."
+            )
+            victory_label = "Перемога зафіксована в чек-іні"
+            defeat_label = "Складний момент зафіксований в чек-іні"
+        else:
+            title = f"Chapter {chapter_number}: The Week That Held The Line"
+            narrative = (
+                f"{display_name} enters {period_start} to {period_end} not as a passive observer, "
+                f"but as someone learning to read the truth in the data. The battlefield this week: {habit_names}.\n\n"
+                f"The system recorded {victory_count} victories and {defeat_count} lost moments. "
+                "The wins prove the new identity has evidence. The losses do not erase the path; "
+                "they mark where the old pattern still looks for an opening.\n\n"
+                "This chapter is not about perfection. It is about continuing after every honest check-in. "
+                "Next week asks for one focus: one day, one action, one clean win at a time."
+            )
+            if reason:
+                narrative += "\n\nThe AI provider was temporarily unavailable, so this chapter was generated locally from your data."
+            character_growth = "The user is moving from random struggle into conscious observation of their behavior system."
+            victory_label = "Victory recorded in check-in"
+            defeat_label = "Hard moment recorded in check-in"
+
+        return {
+            "title": title,
+            "narrative": narrative,
+            "victories": [
+                {"date": c.get("date"), "description": victory_label}
+                for c in victories[:10]
+            ],
+            "battles": [
+                {"date": c.get("date"), "description": defeat_label, "outcome": "loss"}
+                for c in defeats[:10]
+            ],
+            "character_growth": character_growth,
+        }
 
     async def analyze_daily(
         self,
@@ -527,57 +649,80 @@ class AIAnalyzer:
         print("[AI] Daily analysis complete!")
         return analysis
 
-    async def generate_hero_chapter(self, user_id: str) -> dict:
+    async def generate_hero_chapter(
+        self,
+        user_id: str,
+        habit_id: str | None = None,
+        preferred_language: str | None = None,
+        local_fallback_reason: str | None = None,
+    ) -> dict:
         """Generate a Hero Mode chapter covering the last 7 days."""
         profile = await self._get_profile(user_id)
-        habits = await self._get_active_habits(user_id)
+        lang = self._normalize_language(profile, preferred_language)
+        response_language = self._language_label(lang)
+        all_habits = await self._get_active_habits(user_id)
+        habits = all_habits
+        if habit_id:
+            focused = [h for h in all_habits if str(h.get("id")) == str(habit_id)]
+            if focused:
+                habits = focused
         end_date = date.today()
         start_date = end_date - timedelta(days=7)
-
-        # Get existing chapters count
-        chapters_resp = await (
-            self.db.table("hero_chapters")
-            .select("chapter_number")
-            .eq("user_id", user_id)
-            .order("chapter_number", desc=True)
-            .limit(1)
-            .execute()
-        )
-        next_chapter = (chapters_resp.data[0]["chapter_number"] + 1) if chapters_resp.data else 1
+        next_chapter = await self._next_hero_chapter_number(user_id)
 
         # Get week's checkins
-        checkins = await (
+        checkins_query = (
             self.db.table("checkins")
             .select("*")
             .eq("user_id", user_id)
             .gte("date", start_date.isoformat())
             .lte("date", end_date.isoformat())
-            .execute()
         )
+        if habit_id:
+            checkins_query = checkins_query.eq("habit_id", habit_id)
+        checkins = await checkins_query.execute()
 
         victories = [c for c in (checkins.data or []) if c["result"] == "success"]
         defeats = [c for c in (checkins.data or []) if c["result"] == "relapse"]
 
-        prompt = HERO_CHAPTER_PROMPT.format(
-            chapter_number=next_chapter,
-            display_name=profile.get("display_name", "The Warrior"),
-            habits_summary=", ".join(h["name"] for h in habits),
-            identity_statement=profile.get("current_identity_statement", "Becoming unstoppable"),
-            period_start=start_date.isoformat(),
-            period_end=end_date.isoformat(),
-            victories=json.dumps(victories, default=str),
-            defeats=json.dumps(defeats, default=str),
-            key_moments="See victories and defeats above",
-            emotional_data="Derived from check-in mood scores",
-            previous_chapters="First chapter" if next_chapter == 1 else "Previous chapters exist",
-        )
+        if local_fallback_reason:
+            chapter = self._build_local_hero_chapter(
+                profile=profile,
+                habits=habits,
+                victories=victories,
+                defeats=defeats,
+                chapter_number=next_chapter,
+                period_start=start_date.isoformat(),
+                period_end=end_date.isoformat(),
+                lang=lang,
+                reason=local_fallback_reason,
+            )
+        else:
+            prompt = HERO_CHAPTER_PROMPT.format(
+                chapter_number=next_chapter,
+                display_name=profile.get("display_name", "The Warrior"),
+                habits_summary=", ".join(h["name"] for h in habits) or "No active habit selected",
+                identity_statement=profile.get("current_identity_statement", "Becoming unstoppable"),
+                preferred_language=response_language,
+                period_start=start_date.isoformat(),
+                period_end=end_date.isoformat(),
+                victories=json.dumps(victories, default=str, ensure_ascii=False),
+                defeats=json.dumps(defeats, default=str, ensure_ascii=False),
+                key_moments="See victories and defeats above",
+                emotional_data="Derived from check-in mood scores",
+                previous_chapters=await self._previous_hero_chapters_summary(user_id),
+            )
 
-        chapter = await self._generate(prompt, temperature=0.9)
+            chapter = await self._generate(prompt, temperature=0.9)
+            chapter = self._normalize_hero_chapter(chapter, next_chapter)
+            if lang == "uk" and self._is_latin_heavy(
+                f"{chapter.get('title', '')} {chapter.get('narrative', '')} {chapter.get('character_growth', '')}"
+            ):
+                raise ValueError("Hero Mode returned English text while Ukrainian was requested")
 
         # Store chapter
-        await (
-            self.db.table("hero_chapters")
-            .insert({
+        stored = await self._insert_hero_chapter(
+            {
                 "user_id": user_id,
                 "chapter_number": next_chapter,
                 "title": chapter.get("title", f"Chapter {next_chapter}"),
@@ -587,11 +732,10 @@ class AIAnalyzer:
                 "character_growth": chapter.get("character_growth", ""),
                 "period_start": start_date.isoformat(),
                 "period_end": end_date.isoformat(),
-            })
-            .execute()
+            }
         )
 
-        return chapter
+        return (stored.data or [chapter])[0]
 
     async def analyze_weekly(self, user_id: str, preferred_language: str | None = None) -> dict:
         """

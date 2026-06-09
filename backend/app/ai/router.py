@@ -60,6 +60,11 @@ class AnalysisRequest(BaseModel):
     language: Optional[str] = None
 
 
+class HeroChapterRequest(BaseModel):
+    habit_id: Optional[UUID] = None
+    language: Optional[str] = None
+
+
 class InsightFeedback(BaseModel):
     feedback: str  # "helpful", "not_helpful", "inaccurate"
     comment: Optional[str] = None
@@ -276,6 +281,7 @@ async def get_hero_chapters(
 
 @router.post("/hero/generate")
 async def generate_hero_chapter(
+    data: HeroChapterRequest | None = None,
     user=Depends(get_current_user),
     client: AsyncClient = Depends(get_authenticated_client),
 ):
@@ -283,11 +289,17 @@ async def generate_hero_chapter(
     settings = get_settings()
     admin_client = await get_supabase_admin()
     analyzer = AIAnalyzer(settings, admin_client)
+    payload = data or HeroChapterRequest()
+    habit_id = str(payload.habit_id) if payload.habit_id else None
 
     try:
         chapter = await _run_with_retries(
-            lambda: analyzer.generate_hero_chapter(str(user.id)),
-            attempts=3,
+            lambda: analyzer.generate_hero_chapter(
+                str(user.id),
+                habit_id=habit_id,
+                preferred_language=payload.language,
+            ),
+            attempts=1,
             delay_seconds=1.2,
         )
         return {
@@ -299,7 +311,11 @@ async def generate_hero_chapter(
             alt_chapter = await _try_openai_fallback(
                 settings,
                 admin_client,
-                lambda alt: alt.generate_hero_chapter(str(user.id)),
+                lambda alt: alt.generate_hero_chapter(
+                    str(user.id),
+                    habit_id=habit_id,
+                    preferred_language=payload.language,
+                ),
             )
             if alt_chapter:
                 return {
@@ -309,39 +325,12 @@ async def generate_hero_chapter(
                 }
         except Exception:
             pass
-        # Fallback path when AI provider is temporarily unavailable.
-        end_date = date.today()
-        start_date = end_date - timedelta(days=7)
-        chapters_resp = await (
-            client.table("hero_chapters")
-            .select("chapter_number")
-            .eq("user_id", str(user.id))
-            .order("chapter_number", desc=True)
-            .limit(1)
-            .execute()
-        )
-        next_chapter = (chapters_resp.data[0]["chapter_number"] + 1) if chapters_resp.data else 1
 
-        fallback_chapter = {
-            "title": f"Chapter {next_chapter}: Hold The Line",
-            "narrative": (
-                "AI narration is temporarily unavailable, but your progress is still real. "
-                "This week, your mission is simple: keep showing up daily, protect your morning routine, "
-                "and win one hard moment each day."
-            ),
-        }
-        # Insert only conservative columns to stay compatible with schema variants.
-        await (
-            client.table("hero_chapters")
-            .insert({
-                "user_id": str(user.id),
-                "chapter_number": next_chapter,
-                "title": fallback_chapter["title"],
-                "narrative": fallback_chapter["narrative"],
-                "period_start": start_date.isoformat(),
-                "period_end": end_date.isoformat(),
-            })
-            .execute()
+        fallback_chapter = await analyzer.generate_hero_chapter(
+            str(user.id),
+            habit_id=habit_id,
+            preferred_language=payload.language,
+            local_fallback_reason=str(e),
         )
         return {
             "message": f"Hero chapter generated in fallback mode ({str(e)[:90]}).",

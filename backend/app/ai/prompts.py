@@ -94,6 +94,7 @@ HERO_CHAPTER_PROMPT = """You are writing Chapter {chapter_number} of this warrio
 Name: {display_name}
 Their battle: {habits_summary}
 Identity they're forging: {identity_statement}
+Preferred response language: {preferred_language}
 
 ## THIS WEEK'S BATTLES ({period_start} → {period_end})
 ### Victories:
@@ -114,6 +115,7 @@ Identity they're forging: {identity_statement}
 ---
 
 Write an EPIC hero chapter in JSON:
+CRITICAL LANGUAGE RULE: Every user-facing JSON string value MUST be written in {preferred_language}. Do not switch to English unless the preferred language is English.
 {{
     "title": "An epic chapter title (like a fantasy novel)",
     "narrative": "A 3-5 paragraph epic narrative. Write about the user in third person as 'The Warrior' or 'The Refactor-Born'. Make their mundane daily struggles sound LEGENDARY. Reference real events but elevate them to mythic proportions. Include inner monologue. End with a cliffhanger or powerful realization.",

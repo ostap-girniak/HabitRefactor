@@ -391,7 +391,7 @@ export function useGenerateHeroChapter() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => aiApi.generateHeroChapter(),
+    mutationFn: (data?: Record<string, unknown>) => aiApi.generateHeroChapter(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai", "hero"] });
     },
